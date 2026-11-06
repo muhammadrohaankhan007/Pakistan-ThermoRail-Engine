@@ -4,10 +4,56 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>web</title>
+    <title>Pakistan ThermoRail Engine</title>
+    <link rel="stylesheet" href="/src/style.css" />
   </head>
   <body>
-    <div id="app"></div>
+    <div id="map"></div>
+
+    <aside id="sidebar" class="sidebar">
+      <header class="panel-header">
+        <h1>Pakistan ThermoRail</h1>
+        <p class="subtitle">Heat exposure along Pakistan's railway network</p>
+        <p id="status-line" class="status-line">Loading features...</p>
+      </header>
+
+      <section class="panel-section">
+        <span class="section-title">Exposure Mode</span>
+        <div class="toggle-group" role="group" aria-label="Exposure Mode">
+          <button type="button" class="toggle-btn active" data-prop="tier_rank" id="btn-combined">Combined</button>
+          <button type="button" class="toggle-btn" data-prop="tier_air" id="btn-air">Air</button>
+          <button type="button" class="toggle-btn" data-prop="tier_soil" id="btn-soil">Ground</button>
+        </div>
+      </section>
+
+      <section class="panel-section">
+        <div class="section-header-inline">
+          <span class="section-title">Tier Filter</span>
+          <span class="section-subtitle">Uncheck to hide</span>
+        </div>
+        <div class="filter-list" id="tier-filter-list">
+          <!-- Tier checkboxes with color swatches rendered here -->
+        </div>
+      </section>
+
+      <section class="panel-section">
+        <span class="section-title">Network Summary (<span id="active-mode-label">Combined</span>)</span>
+        <div id="tier-summary" class="summary-container">
+          <!-- Summary table rendered here -->
+        </div>
+      </section>
+
+      <footer class="panel-footer">
+        <div class="notes">
+          <p>Tiers are relative quantile cuts (50/30/15/5%) across 787 grid cells of model data. They are not physical thresholds for track damage.</p>
+          <p>Temperatures are model data (Open-Meteo, ERA5/ERA5-Land), May 1 to Jun 30 2026, 95th percentile of hourly values. Soil temperature (0-7 cm) is a proxy, not rail temperature.</p>
+        </div>
+        <div class="credits">
+          <p>Railway data &copy; OpenStreetMap contributors. Weather data: Open-Meteo.com.</p>
+        </div>
+      </footer>
+    </aside>
+
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>
