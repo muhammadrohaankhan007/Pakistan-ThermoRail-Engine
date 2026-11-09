@@ -176,38 +176,15 @@ function renderSummary() {
  */
 function initApp() {
   // Start the fetch immediately
-  const dataPromise = fetch('/data/pk_rail_heat_v2.geojson').then(r => {
+  const dataPromise = fetch(import.meta.env.BASE_URL + 'data/pk_rail_heat_v2.geojson').then(r => {
     if (!r.ok) throw new Error(`HTTP ${r.status}: ${r.statusText}`);
     return r.json();
   });
 
-  // Grayscale OpenStreetMap raster basemap
+  // OpenFreeMap Positron vector basemap
   const map = new Map({
     container: 'map',
-    style: {
-      version: 8,
-      sources: {
-        'osm-tiles': {
-          type: 'raster',
-          tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
-          tileSize: 256,
-          attribution: 'Railway data &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors. Weather data: <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo.com</a>.',
-          maxzoom: 19
-        }
-      },
-      layers: [
-        {
-          id: 'osm-tiles-layer',
-          type: 'raster',
-          source: 'osm-tiles',
-          paint: {
-            'raster-saturation': -1,
-            'raster-contrast': 0.08,
-            'raster-opacity': 0.9
-          }
-        }
-      ]
-    },
+    style: 'https://tiles.openfreemap.org/styles/positron',
     center: [69.34, 29.8],
     zoom: 5.4
   });
