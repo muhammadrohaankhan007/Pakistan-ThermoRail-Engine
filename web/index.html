@@ -4,32 +4,34 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Pakistan ThermoRail Engine</title>
+    <title>Pakistan ThermoRail - Hybrid Risk & Forecast Engine</title>
     <link rel="stylesheet" href="/src/style.css" />
   </head>
   <body>
     <div id="map"></div>
 
+    <!-- Main Control Sidebar -->
     <aside id="sidebar" class="sidebar">
       <header class="panel-header">
+        <div class="header-tag">PRODUCTION RISK PIPELINE v3</div>
         <h1>Pakistan ThermoRail</h1>
-        <p class="subtitle">Heat exposure along Pakistan's railway network</p>
-        <p id="status-line" class="status-line">Loading features...</p>
+        <p class="subtitle">Dual-Engine Heat Exposure & Live Anomaly Forecast</p>
+        <p id="status-line" class="status-line">Loading pipeline data...</p>
       </header>
 
       <section class="panel-section">
-        <span class="section-title">Exposure Mode</span>
+        <span class="section-title">Forecast Exposure Metric</span>
         <div class="toggle-group" role="group" aria-label="Exposure Mode">
           <button type="button" class="toggle-btn active" data-prop="tier_rank" id="btn-combined">Combined</button>
-          <button type="button" class="toggle-btn" data-prop="tier_air" id="btn-air">Air</button>
-          <button type="button" class="toggle-btn" data-prop="tier_soil" id="btn-soil">Ground</button>
+          <button type="button" class="toggle-btn" data-prop="tier_air" id="btn-air">Air (P95)</button>
+          <button type="button" class="toggle-btn" data-prop="tier_soil" id="btn-soil">Ground (P95)</button>
         </div>
       </section>
 
       <section class="panel-section">
         <div class="section-header-inline">
-          <span class="section-title">Tier Filter</span>
-          <span class="section-subtitle">Uncheck to hide</span>
+          <span class="section-title">Risk Anomaly Tiers</span>
+          <span class="section-subtitle">Uncheck to filter</span>
         </div>
         <div class="filter-list" id="tier-filter-list">
           <!-- Tier checkboxes with color swatches rendered here -->
@@ -43,16 +45,52 @@
         </div>
       </section>
 
+      <section class="panel-section pipeline-legend">
+        <span class="section-title">Dual-Engine Architecture</span>
+        <div class="engine-legend-box">
+          <div class="engine-badge-sample badge-punjab">Punjab 86-Yr Z-Score Engine</div>
+          <p class="engine-desc">6,064 segments (59.4%) scored via station Z-scores ($Z = \frac{T - \mu}{\sigma}$) against 1940–2026 ERA5 monthly norms.</p>
+        </div>
+        <div class="engine-legend-box">
+          <div class="engine-badge-sample badge-national">National Quantile Fallback</div>
+          <p class="engine-desc">4,152 segments (40.6%) ranked against national May–June baseline quantile thresholds ($P_{50}, P_{80}, P_{95}$).</p>
+        </div>
+      </section>
+
       <footer class="panel-footer">
         <div class="notes">
-          <p>Tiers are relative quantile cuts (50/30/15/5%) across 787 grid cells of model data. They are not physical thresholds for track damage.</p>
-          <p>Temperatures are model data (Open-Meteo, ERA5/ERA5-Land), May 1 to Jun 30 2026, 95th percentile of hourly values. Soil temperature (0-7 cm) is a proxy, not rail temperature.</p>
+          <p><strong>Punjab Corridors:</strong> Evaluated using 86-year ERA5 station climatology ($Z \ge +2.0\sigma$ Critical, $\ge +1.2\sigma$ High).</p>
+          <p><strong>Live Forecast:</strong> 7-day hourly temperature from Open-Meteo API across 787 centroids.</p>
         </div>
         <div class="credits">
           <p>Basemap: <a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a> / <a href="https://www.openmaptiles.org/" target="_blank" rel="noopener">OpenMapTiles</a> / &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors.</p>
-          <p>Railway data &copy; OpenStreetMap contributors. Weather data: Open-Meteo.com.</p>
+          <p>Railway data &copy; OpenStreetMap contributors. Weather data: Open-Meteo.com & ERA5.</p>
         </div>
       </footer>
+    </aside>
+
+    <!-- Floating Decadal Climate Shift Drawer -->
+    <aside id="decadal-drawer" class="decadal-drawer collapsed" aria-label="Decadal Climate Trends">
+      <button id="decadal-toggle-btn" class="decadal-toggle-btn" type="button" aria-expanded="false" title="Click to toggle Decadal Climate Shift drawer">
+        <span class="drawer-icon">📈</span>
+        <span class="drawer-btn-label">Decadal Climate Shift (1940–2026)</span>
+        <span class="drawer-badge" id="decadal-badge">Max +3.67°C</span>
+        <span class="drawer-chevron" id="drawer-chevron">▼</span>
+      </button>
+
+      <div id="decadal-content" class="decadal-content" style="display: none;">
+        <div class="drawer-header">
+          <div>
+            <h3>Decadal Warming Analysis</h3>
+            <p class="drawer-subtitle">86-Year ERA5 May–June Shifts (1940–1970 vs 1996–2026)</p>
+          </div>
+          <button id="decadal-close-btn" class="drawer-close-btn" type="button" title="Collapse drawer">&times;</button>
+        </div>
+
+        <div id="decadal-body">
+          <div class="drawer-loading">Loading climate trends...</div>
+        </div>
+      </div>
     </aside>
 
     <script type="module" src="/src/main.js"></script>

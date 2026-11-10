@@ -1,3 +1,7 @@
+/* ==========================================================================
+   Pakistan ThermoRail - Production Risk Pipeline (Dark Glassmorphism Theme)
+   ========================================================================== */
+
 * {
   box-sizing: border-box;
   margin: 0;
@@ -9,8 +13,8 @@ body, html {
   height: 100%;
   overflow: hidden;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  color: #1f2937;
-  background-color: #f3f4f6;
+  color: #f8fafc;
+  background-color: #0b0f19;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -24,19 +28,22 @@ body, html {
   height: 100%;
 }
 
-/* Sidebar panel */
+/* ==========================================================================
+   Main Sidebar Panel (Dark Glassmorphism)
+   ========================================================================== */
 .sidebar {
   position: absolute;
   top: 16px;
   left: 16px;
-  width: 350px;
+  width: 360px;
   max-width: calc(100vw - 32px);
   max-height: calc(100vh - 32px);
-  background: rgba(255, 255, 255, 0.96);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  border-radius: 8px;
-  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.15), 0 1px 3px rgba(0, 0, 0, 0.08);
+  background: rgba(15, 23, 42, 0.88);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5), 0 1px 3px rgba(0, 0, 0, 0.2);
   padding: 16px 18px;
   overflow-y: auto;
   z-index: 10;
@@ -45,25 +52,50 @@ body, html {
   gap: 14px;
 }
 
-.panel-header h1 {
-  font-size: 1.15rem;
+/* Custom subtle scrollbar */
+.sidebar::-webkit-scrollbar,
+.decadal-content::-webkit-scrollbar {
+  width: 5px;
+}
+.sidebar::-webkit-scrollbar-thumb,
+.decadal-content::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 3px;
+}
+
+.header-tag {
+  display: inline-block;
+  font-size: 0.65rem;
   font-weight: 700;
-  color: #111827;
-  line-height: 1.25;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: rgba(59, 130, 246, 0.2);
+  color: #60a5fa;
+  border: 1px solid rgba(59, 130, 246, 0.35);
+  margin-bottom: 5px;
+}
+
+.panel-header h1 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #ffffff;
+  line-height: 1.2;
 }
 
 .panel-header .subtitle {
   font-size: 0.8rem;
-  color: #4b5563;
+  color: #94a3b8;
   margin-top: 3px;
   line-height: 1.35;
 }
 
 .panel-header .status-line {
   font-size: 0.72rem;
-  font-weight: 500;
-  color: #047857;
-  margin-top: 4px;
+  font-weight: 600;
+  color: #34d399;
+  margin-top: 5px;
 }
 
 .panel-section {
@@ -71,7 +103,7 @@ body, html {
   flex-direction: column;
   gap: 8px;
   padding-bottom: 12px;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .section-header-inline {
@@ -81,52 +113,53 @@ body, html {
 }
 
 .section-title {
-  font-size: 0.78rem;
+  font-size: 0.75rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: #374151;
+  color: #cbd5e1;
 }
 
 .section-subtitle {
-  font-size: 0.72rem;
-  color: #6b7280;
+  font-size: 0.7rem;
+  color: #64748b;
 }
 
-/* 3-button toggle */
+/* 3-button mode toggle */
 .toggle-group {
   display: flex;
-  background-color: #e5e7eb;
+  background-color: rgba(30, 41, 59, 0.8);
   border-radius: 6px;
-  padding: 2px;
+  padding: 3px;
   gap: 2px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 .toggle-btn {
   flex: 1;
-  border: none;
-  background: transparent;
   padding: 6px 8px;
-  font-size: 0.82rem;
-  font-weight: 500;
-  color: #4b5563;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #94a3b8;
+  background: transparent;
+  border: none;
   border-radius: 4px;
   cursor: pointer;
   transition: all 0.15s ease-in-out;
+  text-align: center;
 }
 
 .toggle-btn:hover {
-  color: #111827;
+  color: #ffffff;
 }
 
 .toggle-btn.active {
-  background: #ffffff;
-  color: #111827;
-  font-weight: 600;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+  background: #2563eb;
+  color: #ffffff;
+  box-shadow: 0 1px 4px rgba(37, 99, 235, 0.4);
 }
 
-/* Tier Filter checkboxes */
+/* Tier filter list */
 .filter-list {
   display: flex;
   flex-direction: column;
@@ -137,16 +170,16 @@ body, html {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-size: 0.82rem;
+  font-size: 0.8rem;
+  color: #e2e8f0;
+  cursor: pointer;
   padding: 4px 6px;
   border-radius: 4px;
-  cursor: pointer;
-  user-select: none;
-  transition: background-color 0.15s;
+  transition: background 0.12s;
 }
 
 .tier-item:hover {
-  background-color: #f3f4f6;
+  background: rgba(255, 255, 255, 0.05);
 }
 
 .tier-item-left {
@@ -156,25 +189,21 @@ body, html {
 }
 
 .tier-checkbox {
-  width: 15px;
-  height: 15px;
   cursor: pointer;
-  accent-color: #1f2937;
+  accent-color: #3b82f6;
 }
 
 .color-swatch {
-  width: 16px;
-  height: 10px;
-  border-radius: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
   display: inline-block;
   flex-shrink: 0;
-  border: 1px solid rgba(0, 0, 0, 0.15);
+  box-shadow: 0 0 4px rgba(0, 0, 0, 0.3);
 }
 
 .tier-label {
   font-weight: 500;
-  color: #1f2937;
-  text-transform: capitalize;
 }
 
 /* Summary table */
@@ -185,7 +214,7 @@ body, html {
 .summary-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.8rem;
+  font-size: 0.78rem;
   font-variant-numeric: tabular-nums;
 }
 
@@ -197,23 +226,22 @@ body, html {
 
 .summary-table th {
   font-weight: 600;
-  color: #4b5563;
-  border-bottom: 1px solid #d1d5db;
-  font-size: 0.72rem;
+  color: #94a3b8;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  font-size: 0.7rem;
   text-transform: uppercase;
   letter-spacing: 0.03em;
 }
 
 .summary-table td {
-  color: #1f2937;
-  border-bottom: 1px solid #f3f4f6;
+  color: #e2e8f0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
 }
 
 .summary-table .col-tier {
   display: flex;
   align-items: center;
   gap: 6px;
-  text-transform: capitalize;
 }
 
 .summary-table .col-num {
@@ -224,10 +252,54 @@ body, html {
 .summary-table tr.total-row th,
 .summary-table tr.total-row td {
   font-weight: 700;
-  color: #111827;
-  border-top: 1px solid #d1d5db;
+  color: #ffffff;
+  border-top: 1px solid rgba(255, 255, 255, 0.15);
   border-bottom: none;
   padding-top: 6px;
+}
+
+/* Dual Engine Legend Box */
+.pipeline-legend {
+  gap: 8px;
+}
+
+.engine-legend-box {
+  background: rgba(30, 41, 59, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 6px;
+  padding: 7px 9px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.engine-badge-sample {
+  display: inline-block;
+  align-self: flex-start;
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.badge-punjab {
+  background: rgba(29, 78, 216, 0.85);
+  color: #eff6ff;
+  border: 1px solid rgba(96, 165, 250, 0.4);
+}
+
+.badge-national {
+  background: rgba(180, 83, 9, 0.85);
+  color: #fef3c7;
+  border: 1px solid rgba(251, 191, 36, 0.4);
+}
+
+.engine-desc {
+  font-size: 0.7rem;
+  line-height: 1.35;
+  color: #94a3b8;
 }
 
 /* Footer / Notes / Credits */
@@ -235,9 +307,9 @@ body, html {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  font-size: 0.72rem;
+  font-size: 0.7rem;
   line-height: 1.4;
-  color: #6b7280;
+  color: #94a3b8;
 }
 
 .panel-footer .notes p {
@@ -249,27 +321,326 @@ body, html {
 }
 
 .panel-footer .credits {
-  font-size: 0.7rem;
-  color: #4b5563;
-  border-top: 1px solid #e5e7eb;
+  font-size: 0.68rem;
+  color: #64748b;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
   padding-top: 6px;
 }
 
-/* MapLibre Popup Customization */
-.maplibregl-popup-content {
-  padding: 12px 14px;
+.panel-footer .credits a {
+  color: #60a5fa;
+  text-decoration: none;
+}
+.panel-footer .credits a:hover {
+  text-decoration: underline;
+}
+
+/* ==========================================================================
+   Decadal Climate Shift Drawer (Floating Collapsible Component)
+   ========================================================================== */
+.decadal-drawer {
+  position: absolute;
+  top: 16px;
+  right: 56px; /* Sits next to MapLibre nav controls */
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.decadal-toggle-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  background: rgba(15, 23, 42, 0.9);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  color: #f8fafc;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  transition: all 0.2s ease;
+}
+
+.decadal-toggle-btn:hover {
+  background: rgba(30, 41, 59, 0.95);
+  border-color: rgba(96, 165, 250, 0.4);
+}
+
+.drawer-icon {
+  font-size: 0.9rem;
+}
+
+.drawer-badge {
+  background: rgba(239, 68, 68, 0.25);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 0.68rem;
+  font-weight: 700;
+}
+
+.drawer-chevron {
+  font-size: 0.65rem;
+  color: #94a3b8;
+  transition: transform 0.2s ease;
+}
+
+.decadal-drawer:not(.collapsed) .drawer-chevron {
+  transform: rotate(180deg);
+}
+
+.decadal-content {
+  width: 380px;
+  max-width: calc(100vw - 32px);
+  max-height: calc(100vh - 80px);
+  margin-top: 8px;
+  background: rgba(15, 23, 42, 0.94);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 10px;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.6);
+  padding: 14px 16px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.drawer-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.drawer-header h3 {
+  font-size: 0.98rem;
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.drawer-subtitle {
+  font-size: 0.7rem;
+  color: #94a3b8;
+  margin-top: 2px;
+}
+
+.drawer-close-btn {
+  background: transparent;
+  border: none;
+  font-size: 1.2rem;
+  color: #94a3b8;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0 4px;
+}
+
+.drawer-close-btn:hover {
+  color: #ffffff;
+}
+
+/* Decadal KPI Grid */
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.kpi-card {
+  background: rgba(30, 41, 59, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.06);
   border-radius: 6px;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.2);
-  font-size: 0.8rem;
+  padding: 8px 6px;
+  text-align: center;
+}
+
+.kpi-label {
+  font-size: 0.65rem;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 3px;
+}
+
+.kpi-val {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.kpi-val.highlight-warm {
+  color: #f87171;
+}
+
+/* Regional Decadal Progression Bar Chart */
+.progression-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.progression-title {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #cbd5e1;
+}
+
+.progression-bars {
+  display: flex;
+  gap: 4px;
+  align-items: flex-end;
+  height: 60px;
+  padding-top: 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.dec-bar-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  height: 100%;
+  justify-content: flex-end;
+}
+
+.dec-bar {
+  width: 100%;
+  border-radius: 2px 2px 0 0;
+  background: #3b82f6;
+  min-height: 4px;
+  transition: height 0.3s ease;
+}
+
+.dec-bar.highlight-recent {
+  background: #ef4444;
+}
+
+.dec-bar-label {
+  font-size: 0.58rem;
+  color: #94a3b8;
+  margin-top: 3px;
+}
+
+.dec-bar-val {
+  font-size: 0.56rem;
+  color: #cbd5e1;
+  margin-bottom: 2px;
+}
+
+/* Corridors list */
+.corridors-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.corridor-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: rgba(30, 41, 59, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 6px;
+  padding: 6px 10px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.corridor-item:hover {
+  background: rgba(51, 65, 85, 0.8);
+  border-color: rgba(96, 165, 250, 0.4);
+  transform: translateX(-2px);
+}
+
+.corridor-info {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.corridor-name {
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.corridor-details {
+  font-size: 0.68rem;
+  color: #94a3b8;
+}
+
+.corridor-delta {
+  font-size: 0.78rem;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.delta-high {
+  background: rgba(239, 68, 68, 0.25);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.4);
+}
+
+.delta-mod {
+  background: rgba(249, 115, 22, 0.25);
+  color: #fb923c;
+  border: 1px solid rgba(249, 115, 22, 0.4);
+}
+
+.drawer-loading {
+  font-size: 0.75rem;
+  color: #94a3b8;
+  text-align: center;
+  padding: 16px 0;
+}
+
+/* ==========================================================================
+   MapLibre Popup Customization (Dark Glassmorphism)
+   ========================================================================== */
+.maplibregl-popup-content {
+  background: rgba(15, 23, 42, 0.95) !important;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  padding: 12px 14px;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  font-size: 0.78rem;
   line-height: 1.4;
-  color: #1f2937;
-  max-width: 330px;
+  color: #f8fafc;
+  max-width: 350px;
+}
+
+.maplibregl-popup-anchor-top .maplibregl-popup-tip {
+  border-bottom-color: rgba(15, 23, 42, 0.95);
+}
+.maplibregl-popup-anchor-bottom .maplibregl-popup-tip {
+  border-top-color: rgba(15, 23, 42, 0.95);
+}
+.maplibregl-popup-anchor-left .maplibregl-popup-tip {
+  border-right-color: rgba(15, 23, 42, 0.95);
+}
+.maplibregl-popup-anchor-right .maplibregl-popup-tip {
+  border-left-color: rgba(15, 23, 42, 0.95);
 }
 
 .maplibregl-popup-close-button {
   padding: 6px 10px;
   font-size: 16px;
-  color: #6b7280;
+  color: #94a3b8;
   border: none;
   background: transparent;
   cursor: pointer;
@@ -277,29 +648,45 @@ body, html {
 }
 
 .maplibregl-popup-close-button:hover {
-  color: #111827;
+  color: #ffffff;
   background: transparent;
 }
 
 .popup-title {
-  font-size: 0.92rem;
+  font-size: 0.94rem;
   font-weight: 700;
-  color: #111827;
+  color: #ffffff;
   margin-bottom: 6px;
   padding-bottom: 4px;
   padding-right: 28px;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.popup-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-bottom: 8px;
+}
+
+.popup-engine-badge {
+  display: inline-block;
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
 .popup-tier-badge {
   display: inline-block;
-  padding: 2px 6px;
-  border-radius: 3px;
-  font-size: 0.72rem;
-  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-size: 0.68rem;
+  font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  margin-bottom: 8px;
   color: #ffffff;
 }
 
@@ -307,32 +694,39 @@ body, html {
   display: grid;
   grid-template-columns: auto 1fr;
   row-gap: 3px;
-  column-gap: 8px;
-  font-size: 0.78rem;
+  column-gap: 10px;
+  font-size: 0.76rem;
 }
 
 .popup-key {
-  color: #6b7280;
+  color: #94a3b8;
 }
 
 .popup-val {
-  font-weight: 500;
-  color: #111827;
+  font-weight: 600;
+  color: #f8fafc;
   text-align: right;
   font-variant-numeric: tabular-nums;
+}
+
+.popup-val.z-score-val {
+  color: #60a5fa;
+  font-weight: 700;
 }
 
 .popup-footnote {
   margin-top: 8px;
   padding-top: 6px;
-  border-top: 1px solid #e5e7eb;
-  font-size: 0.7rem;
-  color: #6b7280;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 0.68rem;
+  color: #64748b;
   font-style: italic;
 }
 
-/* Responsive adjustments */
-@media (max-width: 640px) {
+/* ==========================================================================
+   Responsive adjustments
+   ========================================================================== */
+@media (max-width: 768px) {
   .sidebar {
     top: auto;
     bottom: 0;
@@ -342,6 +736,16 @@ body, html {
     max-width: 100%;
     max-height: 48vh;
     border-radius: 12px 12px 0 0;
-    box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.15);
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.6);
+  }
+
+  .decadal-drawer {
+    right: 16px;
+    top: 16px;
+  }
+
+  .decadal-content {
+    width: calc(100vw - 32px);
+    max-height: 50vh;
   }
 }
