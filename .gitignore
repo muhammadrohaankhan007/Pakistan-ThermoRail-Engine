@@ -1,3 +1,14 @@
 pk_railways.json
 .ipynb_checkpoints/
 __pycache__/
+
+# Heavy raw & intermediate files
+*.xlsx
+*.rar
+*.parquet
+final_data*/
+live_forecast_cache.json
+cell_heat_test.csv
+pk_rail_heat.geojson
+pk_rail_pieces.geojson
+pk_rail_segments.geojson
