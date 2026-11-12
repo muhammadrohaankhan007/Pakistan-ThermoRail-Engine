@@ -1,18 +1,20 @@
 #!/usr/bin/env python3
 """
-Step 2: Spatial Piece-to-Station Mapping
-ThermoRail Hybrid Risk Engine & Historical Baseline Integration
+Step 2: Spatial Grid-Point Mapping (Cells & Pieces)
+Pakistan ThermoRail - Spatial Correlation Engine
 
-Binds each of the 10,216 rail pieces to the nearest historical Punjab station
-using a 3D spherical cKDTree:
-1. Converts station and rail piece coordinates into radians and 3D unit coordinates.
-2. Queries the KDTree scaled to Earth's mean radius (6371 km).
-3. Tags each rail piece with:
-   - has_86yr_baseline: True if distance <= 35.0 km, else False
-   - nearest_station_id: Station string ID if within 35 km, else None (null)
-   - dist_to_station_km: Floating-point great-circle distance in km
+Maps each of the 787 weather cells and 10,216 rail pieces to the nearest
+ERA5 reanalysis grid point using a 3D spherical cKDTree:
+1. Converts grid point coordinates (702 Punjab locations) and query points to 3D Cartesian coords on Earth's sphere.
+2. Identifies nearest grid point and computes great-circle distance.
+3. Tags each location with:
+   - in_grid_coverage: True if distance <= 35.0 km, else False
+   - nearest_grid_point_id: String ID if within 35 km, else None (null)
+   - dist_to_grid_point_km: Floating-point great-circle distance in km
 
-Outputs: piece_station_mapping.csv
+Outputs:
+- cell_grid_mapping.csv (787 cells)
+- piece_station_mapping.csv (10,216 rail pieces, maintained for backwards compatibility)
 """
 
 import sys
@@ -34,130 +36,131 @@ def get_memory_usage_mb():
     return process.memory_info().rss / (1024 * 1024)
 
 
-def map_pieces_to_stations():
+def map_cells_and_pieces():
     start_time = time.time()
-    print("=" * 65)
-    print("ThermoRail: Step 2 - Spatial Piece-to-Station Mapping")
-    print("=" * 65)
+    print("=" * 70)
+    print("ThermoRail: Step 2 - Spatial Cell & Piece to Grid-Point Mapping")
+    print("=" * 70)
     print(f"Initial Memory: {get_memory_usage_mb():.1f} MB")
 
-    stations_csv = "punjab_stations.csv"
-    geojson_path = "pk_rail_heat_v2.geojson"
-    output_csv = "piece_station_mapping.csv"
+    grid_csv = "punjab_stations.csv"  # 702 ERA5 grid points
+    cells_csv = "cell_heat.csv"        # 787 cells
+    geojson_path = "pk_rail_heat_v2.geojson"  # 10,216 pieces
+    output_cells_mapping = "cell_grid_mapping.csv"
+    output_pieces_mapping = "piece_station_mapping.csv"
 
-    if not os.path.exists(stations_csv):
-        raise FileNotFoundError(f"Missing {stations_csv}. Run Step 1 first.")
-    if not os.path.exists(geojson_path):
-        raise FileNotFoundError(f"Missing {geojson_path}.")
+    if not os.path.exists(grid_csv):
+        raise FileNotFoundError(f"Missing {grid_csv}.")
+    if not os.path.exists(cells_csv):
+        raise FileNotFoundError(f"Missing {cells_csv}.")
 
-    # 1. Load stations and convert to radians
-    print(f"Loading station metadata from {stations_csv}...")
-    stations = pd.read_csv(stations_csv)
-    print(f"Loaded {len(stations)} stations.")
+    # 1. Load grid points and construct 3D KDTree
+    print(f"Loading grid point metadata from {grid_csv}...")
+    grid_df = pd.read_csv(grid_csv)
+    # Ensure column is grid_point_id
+    id_col = "station_id" if "station_id" in grid_df.columns else "grid_point_id"
+    grid_ids = grid_df[id_col].values
+    num_grid_pts = len(grid_df)
+    print(f"Loaded {num_grid_pts} ERA5 grid points.")
 
-    stat_lats = np.radians(stations["lat"].values)
-    stat_lons = np.radians(stations["lon"].values)
+    g_lats = np.radians(grid_df["lat"].values)
+    g_lons = np.radians(grid_df["lon"].values)
+    g_x = EARTH_RADIUS_KM * np.cos(g_lats) * np.cos(g_lons)
+    g_y = EARTH_RADIUS_KM * np.cos(g_lats) * np.sin(g_lons)
+    g_z = EARTH_RADIUS_KM * np.sin(g_lats)
+    grid_coords_3d = np.column_stack([g_x, g_y, g_z])
 
-    # 3D Cartesian coordinates on sphere
-    stat_x = EARTH_RADIUS_KM * np.cos(stat_lats) * np.cos(stat_lons)
-    stat_y = EARTH_RADIUS_KM * np.cos(stat_lats) * np.sin(stat_lons)
-    stat_z = EARTH_RADIUS_KM * np.sin(stat_lats)
-    stat_coords_3d = np.column_stack([stat_x, stat_y, stat_z])
+    print("Constructing 3D spatial cKDTree index for ERA5 grid points...")
+    tree = cKDTree(grid_coords_3d)
 
-    print("Constructing 3D spatial cKDTree index for stations...")
-    tree_start = time.time()
-    tree = cKDTree(stat_coords_3d)
-    print(f"Index built in {time.time() - tree_start:.4f}s")
+    # 2. Map 787 cells from cell_heat.csv
+    print(f"\nMapping 787 cell centroids from {cells_csv}...")
+    cells_df = pd.read_csv(cells_csv)
+    c_lats = np.radians(cells_df["api_lat"].values)
+    c_lons = np.radians(cells_df["api_lon"].values)
+    c_x = EARTH_RADIUS_KM * np.cos(c_lats) * np.cos(c_lons)
+    c_y = EARTH_RADIUS_KM * np.cos(c_lats) * np.sin(c_lons)
+    c_z = EARTH_RADIUS_KM * np.sin(c_lats)
+    cell_coords_3d = np.column_stack([c_x, c_y, c_z])
 
-    # 2. Load rail pieces from GeoJSON
-    print(f"Loading rail pieces from {geojson_path}...")
-    load_start = time.time()
-    with open(geojson_path, "r", encoding="utf-8") as f:
-        geojson_data = json.load(f)
+    chords_c, indices_c = tree.query(cell_coords_3d, k=1)
+    arc_dists_c = 2.0 * EARTH_RADIUS_KM * np.arcsin(np.clip(chords_c / (2.0 * EARTH_RADIUS_KM), 0.0, 1.0))
+    in_coverage_c = arc_dists_c <= THRESHOLD_KM
 
-    features = geojson_data["features"]
-    total_pieces = len(features)
-    print(f"Loaded {total_pieces:,} rail features in {time.time() - load_start:.2f}s | Memory: {get_memory_usage_mb():.1f} MB")
-
-    # Extract center coordinates and metadata
-    osm_ids = []
-    pieces = []
-    names = []
-    cell_ids = []
-    lats = []
-    lons = []
-
-    for f in features:
-        p = f["properties"]
-        osm_ids.append(p.get("osm_id"))
-        pieces.append(p.get("piece"))
-        names.append(p.get("name"))
-        cell_ids.append(p.get("cell_id"))
-        lats.append(float(p["lat"]))
-        lons.append(float(p["lon"]))
-
-    p_lats_rad = np.radians(lats)
-    p_lons_rad = np.radians(lons)
-
-    p_x = EARTH_RADIUS_KM * np.cos(p_lats_rad) * np.cos(p_lons_rad)
-    p_y = EARTH_RADIUS_KM * np.cos(p_lats_rad) * np.sin(p_lons_rad)
-    p_z = EARTH_RADIUS_KM * np.sin(p_lats_rad)
-    piece_coords_3d = np.column_stack([p_x, p_y, p_z])
-
-    # 3. Query the KDTree
-    print(f"Querying nearest station for {total_pieces:,} pieces...")
-    query_start = time.time()
-    chords, nearest_indices = tree.query(piece_coords_3d, k=1)
-
-    # Convert chord distance to great-circle arc distance
-    arc_distances = 2.0 * EARTH_RADIUS_KM * np.arcsin(np.clip(chords / (2.0 * EARTH_RADIUS_KM), 0.0, 1.0))
-    query_time = time.time() - query_start
-    print(f"Spatial query completed in {query_time:.3f}s")
-
-    # 4. Tag each rail piece
-    station_id_array = stations["station_id"].values
-    matched_station_ids = station_id_array[nearest_indices]
-
-    has_baseline = arc_distances <= THRESHOLD_KM
-    # nearest_station_id is string if within 35km, else None (null)
-    final_station_ids = [matched_station_ids[i] if has_baseline[i] else None for i in range(total_pieces)]
-
-    mapping_df = pd.DataFrame({
-        "piece_index": np.arange(total_pieces),
-        "osm_id": osm_ids,
-        "piece": pieces,
-        "name": names,
-        "cell_id": cell_ids,
-        "lat": lats,
-        "lon": lons,
-        "has_86yr_baseline": has_baseline,
-        "nearest_station_id": final_station_ids,
-        "dist_to_station_km": np.round(arc_distances, 3),
-        "raw_nearest_station_id": matched_station_ids  # retains geometric nearest station for reference
+    cells_mapping = pd.DataFrame({
+        "cell_id": cells_df["cell_id"],
+        "api_lat": cells_df["api_lat"],
+        "api_lon": cells_df["api_lon"],
+        "in_grid_coverage": in_coverage_c,
+        "nearest_grid_point_id": [grid_ids[idx] if in_coverage_c[i] else None for i, idx in enumerate(indices_c)],
+        "raw_nearest_grid_point_id": grid_ids[indices_c],
+        "dist_to_grid_point_km": np.round(arc_dists_c, 3),
+        "air_max_c": cells_df["air_max_c"],
+        "air_p95_c": cells_df["air_p95_c"]
     })
+    cells_mapping.to_csv(output_cells_mapping, index=False)
+    cov_count = int(in_coverage_c.sum())
+    print(f"Cells in Punjab grid coverage (<= {THRESHOLD_KM} km): {cov_count} / {len(cells_df)} ({cov_count/len(cells_df)*100:.1f}%)")
+    print(f"Fallback cells (> {THRESHOLD_KM} km): {len(cells_df) - cov_count} / {len(cells_df)}")
+    print(f"Saved {output_cells_mapping}")
 
-    # Data integrity checks
-    if len(mapping_df) != total_pieces:
-        raise ValueError(f"Integrity check failed: Expected {total_pieces} rows, got {len(mapping_df)}")
+    # 3. Map rail pieces if GeoJSON exists
+    if os.path.exists(geojson_path):
+        print(f"\nMapping rail pieces from {geojson_path}...")
+        with open(geojson_path, "r", encoding="utf-8") as f:
+            geojson_data = json.load(f)
+        features = geojson_data["features"]
+        total_pieces = len(features)
 
-    punjab_count = int(has_baseline.sum())
-    fallback_count = total_pieces - punjab_count
-    print(f"Punjab pieces (within {THRESHOLD_KM} km): {punjab_count:,} ({punjab_count / total_pieces * 100:.1f}%)")
-    print(f"National fallback pieces (> {THRESHOLD_KM} km): {fallback_count:,} ({fallback_count / total_pieces * 100:.1f}%)")
+        p_osm_ids = []
+        p_pieces = []
+        p_names = []
+        p_cell_ids = []
+        p_lats = []
+        p_lons = []
 
-    # Export mapping CSV
-    mapping_df.to_csv(output_csv, index=False)
-    file_size_kb = os.path.getsize(output_csv) / 1024
-    print(f"Saved piece-station mapping to {output_csv} ({file_size_kb:.1f} KB)")
+        for f in features:
+            p = f["properties"]
+            p_osm_ids.append(p.get("osm_id"))
+            p_pieces.append(p.get("piece"))
+            p_names.append(p.get("name"))
+            p_cell_ids.append(p.get("cell_id"))
+            p_lats.append(float(p["lat"]))
+            p_lons.append(float(p["lon"]))
 
-    total_time = time.time() - start_time
-    print("=" * 65)
-    print(f"Execution Summary: Processed {total_pieces:,} pieces in {total_time:.2f}s")
-    print(f"Peak Memory Usage: {get_memory_usage_mb():.1f} MB")
-    print("=" * 65)
-    return mapping_df
+        p_lats_rad = np.radians(p_lats)
+        p_lons_rad = np.radians(p_lons)
+        p_x = EARTH_RADIUS_KM * np.cos(p_lats_rad) * np.cos(p_lons_rad)
+        p_y = EARTH_RADIUS_KM * np.cos(p_lats_rad) * np.sin(p_lons_rad)
+        p_z = EARTH_RADIUS_KM * np.sin(p_lats_rad)
+        piece_coords_3d = np.column_stack([p_x, p_y, p_z])
+
+        chords_p, indices_p = tree.query(piece_coords_3d, k=1)
+        arc_dists_p = 2.0 * EARTH_RADIUS_KM * np.arcsin(np.clip(chords_p / (2.0 * EARTH_RADIUS_KM), 0.0, 1.0))
+        in_coverage_p = arc_dists_p <= THRESHOLD_KM
+
+        pieces_mapping = pd.DataFrame({
+            "piece_index": np.arange(total_pieces),
+            "osm_id": p_osm_ids,
+            "piece": p_pieces,
+            "name": p_names,
+            "cell_id": p_cell_ids,
+            "lat": p_lats,
+            "lon": p_lons,
+            "has_86yr_baseline": in_coverage_p,
+            "nearest_station_id": [grid_ids[idx] if in_coverage_p[i] else None for i, idx in enumerate(indices_p)],
+            "nearest_grid_point_id": [grid_ids[idx] if in_coverage_p[i] else None for i, idx in enumerate(indices_p)],
+            "dist_to_station_km": np.round(arc_dists_p, 3),
+            "dist_to_grid_point_km": np.round(arc_dists_p, 3)
+        })
+        pieces_mapping.to_csv(output_pieces_mapping, index=False)
+        p_cov = int(in_coverage_p.sum())
+        print(f"Rail pieces in grid coverage: {p_cov:,} / {total_pieces:,} ({p_cov/total_pieces*100:.1f}%)")
+        print(f"Saved {output_pieces_mapping}")
+
+    print(f"\nStep 2 completed in {time.time() - start_time:.2f}s")
+    print("=" * 70)
 
 
 if __name__ == "__main__":
-    map_pieces_to_stations()
-
+    map_cells_and_pieces()

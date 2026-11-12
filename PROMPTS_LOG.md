@@ -146,3 +146,33 @@ Update the click popup for track segments to clearly differentiate between the t
 3. Clicking a line outside Punjab gracefully shows the National Quantile fallback badge.
 4. The Decadal Analytics panel successfully loads and displays climate warming trends.
 ```
+
+
+---
+
+## Directive 1 (Revised): Statistical Normalization, 1991–2020 WMO Baseline & Heat Risk Gate
+
+**Timestamp:** 2026-11-13T00:10:31+05:00  
+**Role:** Senior Data & Systems Engineer  
+**Objective:** Resolve statistical discrepancies in Directive 1:
+1. **Daily Max on Both Sides:** Baseline computed from daily maximum temperatures per grid point and day-of-year ($\pm 7$ day moving window), forecast computed from daily maximums (1 Z per day over 7 days).
+2. **Stationary 30-Year Normal (1991–2020):** Baseline restricted to WMO standard 1991–2020 climatology to avoid historical warming trend contamination.
+3. **Heat Risk Gate ($\text{GATE\_C} = 3.0^\circ\text{C}$):** Suppresses off-season/winter false positives by requiring forecast max $\ge (\text{May–June } P_{95} - \text{GATE\_C})$.
+4. **Fallback Engine:** Outside grid points, margin = forecast max $-$ cell May–June record (`air_max_c`).
+5. **Terminology:** Uses "grid point" (never "station"). Tier labels: `strong_anomaly`, `elevated_anomaly`, `mild_anomaly`, `near_normal`.
+6. **Lightweight Output:** Emits compact `web/public/data/forecast.json` (~60 KB) keyed by `cell_id`.
+7. **Empirical Calibration Check:** Validated against 30 random historical days (empirically $Z \ge 2.0$ at 1.76%, $Z \ge 1.0$ at 19.60%).
+8. **Automated Daily Pipeline:** GitHub Actions cron workflow (`0 6 * * *`) builds and deploys `forecast.json` without committing to `main`.
+
+### Prompt Text:
+```markdown
+Revise the scripts. Do not re-pull any Open-Meteo history; reuse the parquet. 
+1. Baselines from DAILY MAXIMUM temperature: per grid point and day-of-year (+/-7 day window), mean and std of the daily max, over 1991-2020 only. Guards: no nulls, std > 0. Keep the full 1940-2026 series only for decadal_heat_trends.json. 
+2. Forecast: compare each forecast day's max with that day's baseline (z per day, 7 days). Piece score = max z over the 7 days; store peak_day and forecast_max_c. 
+3. Gate: only flag a piece if z >= threshold AND forecast max >= (that point's May-June 95th percentile of daily max) - GATE_C, with GATE_C = 3 as a documented, arbitrary parameter. 
+4. Outside the grid-point coverage: use margin = forecast daily max minus the cell's May-June maximum (air_max_c from cell_heat.csv). Mark these rows engine = "fallback". 
+5. Names: say "grid point", never "station". Tier labels: strong_anomaly, elevated_anomaly, mild_anomaly, near_normal. No "critical" or "safe" wording. 
+6. Output: one small web/public/data/forecast.json keyed by cell_id, with generated_at (UTC), engine, peak_day, forecast_max_c, z (or margin), tier. No new full GeoJSON. 
+7. Add a calibration check: score 30 random past days using the 1991-2020 baseline and report the share in each tier. Expect about 2% at z >= 2 and about 16% at z >= 1. Report the numbers. If they are far off, stop and tell me. 
+8. Add a GitHub Actions cron workflow that runs the script daily and publishes forecast.json with the site, without committing daily to main.
+```

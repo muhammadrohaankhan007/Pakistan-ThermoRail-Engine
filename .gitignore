@@ -2,10 +2,10 @@ pk_railways.json
 .ipynb_checkpoints/
 __pycache__/
 
-# Heavy raw & intermediate files
+# Heavy raw datasets (>100MB)
+punjab_temperature_1940_2026.parquet
 *.xlsx
 *.rar
-*.parquet
 final_data*/
 live_forecast_cache.json
 cell_heat_test.csv

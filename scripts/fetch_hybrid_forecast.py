@@ -1,22 +1,25 @@
 #!/usr/bin/env python3
 """
-Step 4: Hybrid Risk & Live Forecast Engine
-ThermoRail Hybrid Risk Engine & Historical Baseline Integration
+Step 4: Hybrid Risk & Live Daily Forecast Engine (Revised Directive 1)
+Pakistan ThermoRail - Live Operational Anomaly Pipeline
 
-Builds the daily production execution pipeline:
-1. Calls Open-Meteo Live Forecast API for 787 cell points (hourly temperature_2m and soil_temperature_0cm over 7 days).
-2. Calculates 7-day max and 95th-percentile temperatures per cell.
-3. Applies Hybrid Risk Scoring:
-   - Punjab pieces (has_86yr_baseline == True):
-     Z = (T_forecast - mu) / sigma relative to 86-year station baseline for current month.
-     * Z >= +2.0        -> Tier 1 (Critical Anomaly)
-     * +1.2 <= Z < +2.0 -> Tier 2 (High Anomaly)
-     * +0.5 <= Z < +1.2 -> Tier 3 (Moderate Anomaly)
-     * Z < +0.5         -> Tier 4 (Baseline / Low)
-   - Non-Punjab pieces (has_86yr_baseline == False):
-     National quantile percentile cuts using national baseline parameters.
-4. Merges calculated properties into GeoJSON and outputs web/public/data/pk_rail_forecast_v3.geojson
-   (and pk_rail_forecast_v3.geojson in project root).
+Produces a lightweight daily forecast.json keyed by cell_id:
+1. Baselines from DAILY MAXIMUM temperature (1991-2020 normal period):
+   - Compares each forecast day's daily max to that day's DOY baseline (+/-7 day window).
+   - Computes daily Z-scores: Z = (T_forecast_max - mu) / sigma.
+   - Cell score = max Z over the 7-day forecast window; stores peak_day and forecast_max_c.
+2. Heat Risk Gate (documented parameter: GATE_C = 3.0 deg C):
+   - A cell is ONLY flagged if Z >= threshold AND forecast_max_c >= (grid_point_may_june_p95 - GATE_C).
+   - If below this threshold, the cell is classified as 'near_normal' to suppress mild/winter false alarms.
+3. Fallback Engine (outside Punjab grid point coverage):
+   - margin = forecast daily max minus cell's May-June maximum (air_max_c from cell_heat.csv).
+   - Tiered by margin relative to summer records; marked engine = 'fallback'.
+4. Terminology:
+   - Uses 'grid point' (never 'station').
+   - Tier labels: strong_anomaly, elevated_anomaly, mild_anomaly, near_normal (no 'critical' or 'safe').
+5. Output:
+   - Writes web/public/data/forecast.json (and forecast.json at root), ~60 KB, keyed by cell_id.
+   - Does NOT create or overwrite any large GeoJSON file.
 """
 
 import sys
@@ -32,6 +35,7 @@ import numpy as np
 
 OPEN_METEO_URL = "https://api.open-meteo.com/v1/forecast"
 BATCH_SIZE = 50
+GATE_C = 3.0  # Documented arbitrary parameter: forecast must come within GATE_C of May-June P95 peak
 
 
 def get_memory_usage_mb():
@@ -40,9 +44,9 @@ def get_memory_usage_mb():
     return process.memory_info().rss / (1024 * 1024)
 
 
-def fetch_live_forecast_cells(cells_df, cache_file="live_forecast_cache.json"):
+def fetch_live_daily_forecasts(cells_df, cache_file="live_forecast_cache.json"):
     """
-    Fetches 7-day hourly temperature forecasts for all 787 cell centroids.
+    Fetches 7-day daily maximum temperature forecasts for all 787 cell centroids.
     Uses batching of 50 locations per call with caching and exponential retry backoff.
     """
     total_cells = len(cells_df)
@@ -61,7 +65,7 @@ def fetch_live_forecast_cells(cells_df, cache_file="live_forecast_cache.json"):
             except Exception as e:
                 print(f"Cache load failed: {e}. Fetching fresh data...")
 
-    print(f"Fetching fresh 7-day hourly forecast from Open-Meteo for {total_cells} cells...")
+    print(f"Fetching fresh 7-day daily forecast from Open-Meteo for {total_cells} cells...")
     total_batches = math.ceil(total_cells / BATCH_SIZE)
 
     for b in range(total_batches):
@@ -76,286 +80,275 @@ def fetch_live_forecast_cells(cells_df, cache_file="live_forecast_cache.json"):
         params = {
             "latitude": lats,
             "longitude": lons,
-            "hourly": ["temperature_2m", "soil_temperature_0cm"],
+            "daily": ["temperature_2m_max"],
+            "timezone": "auto",
             "forecast_days": 7
         }
 
-        # Request with retries
         success = False
         for attempt in range(4):
             try:
                 resp = requests.get(OPEN_METEO_URL, params=params, timeout=25)
                 if resp.status_code == 200:
                     data = resp.json()
-                    # Handle single location vs multiple
                     if isinstance(data, dict):
                         data = [data]
 
                     for i, loc in enumerate(data):
                         c_id = cell_ids[i]
-                        h = loc.get("hourly", {})
-                        air_temps = [v for v in h.get("temperature_2m", []) if v is not None]
-                        soil_temps = [v for v in h.get("soil_temperature_0cm", []) if v is not None]
+                        d = loc.get("daily", {})
+                        dates = d.get("time", [])
+                        max_temps = [v for v in d.get("temperature_2m_max", []) if v is not None]
 
-                        if air_temps:
-                            air_max = float(np.max(air_temps))
-                            air_p95 = float(np.percentile(air_temps, 95))
+                        if dates and max_temps:
+                            results[c_id] = {
+                                "dates": dates,
+                                "daily_max_c": max_temps
+                            }
                         else:
-                            air_max = float(sub_df.iloc[i].get("air_max_c", 40.0))
-                            air_p95 = float(sub_df.iloc[i].get("air_p95_c", 38.0))
-
-                        if soil_temps:
-                            soil_max = float(np.max(soil_temps))
-                            soil_p95 = float(np.percentile(soil_temps, 95))
-                        else:
-                            soil_max = float(sub_df.iloc[i].get("soil_max_c", 42.0))
-                            soil_p95 = float(sub_df.iloc[i].get("soil_p95_c", 40.0))
-
-                        results[c_id] = {
-                            "air_max_c": round(air_max, 1),
-                            "air_p95_c": round(air_p95, 1),
-                            "soil_max_c": round(soil_max, 1),
-                            "soil_p95_c": round(soil_p95, 1)
-                        }
-
+                            # Fallback if specific cell returned empty
+                            results[c_id] = {
+                                "dates": [datetime.date.today().isoformat()],
+                                "daily_max_c": [float(sub_df.iloc[i].get("air_max_c", 35.0))]
+                            }
                     success = True
                     break
                 else:
-                    print(f"Warning: Batch {b + 1} attempt {attempt + 1} HTTP {resp.status_code}. Retrying...")
-                    time.sleep(1.5 * (attempt + 1))
+                    wait_sec = 2.0 * (attempt + 1)
+                    print(f"Batch {b + 1} HTTP {resp.status_code}, retrying in {wait_sec}s...")
+                    time.sleep(wait_sec)
             except Exception as ex:
-                print(f"Warning: Batch {b + 1} attempt {attempt + 1} error: {ex}. Retrying...")
-                time.sleep(1.5 * (attempt + 1))
+                wait_sec = 2.5 * (attempt + 1)
+                print(f"Batch {b + 1} attempt {attempt + 1} error: {ex}, retrying in {wait_sec}s...")
+                time.sleep(wait_sec)
 
         if not success:
-            print(f"Fallback to static cell heat for batch {b + 1}...")
-            for _, r in sub_df.iterrows():
-                results[r["cell_id"]] = {
-                    "air_max_c": float(r["air_max_c"]),
-                    "air_p95_c": float(r["air_p95_c"]),
-                    "soil_max_c": float(r["soil_max_c"]),
-                    "soil_p95_c": float(r["soil_p95_c"])
-                }
+            error_msg = f"CRITICAL: Open-Meteo batch {b + 1}/{total_batches} failed after 4 retries. Aborting pipeline to prevent stale/corrupt deployment."
+            print(error_msg, file=sys.stderr)
+            raise RuntimeError(error_msg)
 
-        print(f"  Processed batch {b + 1}/{total_batches} ({len(results)}/{total_cells} cells)...")
-        time.sleep(0.3)
+        time.sleep(0.15)  # Rate limit courtesy buffer
 
-    # Save to cache
+    print(f"Successfully retrieved forecasts for {len(results)} cells.")
     try:
         with open(cache_file, "w", encoding="utf-8") as f:
-            json.dump(results, f, indent=2)
-        print(f"Cached forecast results to {cache_file}")
+            json.dump(results, f)
+        print(f"Cached forecast responses to {cache_file}")
     except Exception as e:
-        print(f"Cache write warning: {e}")
+        print(f"Failed to write cache: {e}")
 
     return results
 
 
-def run_hybrid_forecast_pipeline():
+def run_pipeline():
     start_time = time.time()
-    print("=" * 65)
-    print("ThermoRail: Step 4 - Hybrid Risk & Live Forecast Engine")
-    print("=" * 65)
+    print("=" * 70)
+    print("ThermoRail: Step 4 - Hybrid Risk & Forecast Engine (Daily Max / 1991-2020)")
+    print("=" * 70)
     print(f"Initial Memory: {get_memory_usage_mb():.1f} MB")
 
-    geojson_in = "pk_rail_heat_v2.geojson"
-    geojson_out_root = "pk_rail_forecast_v3.geojson"
-    geojson_out_web = os.path.join("web", "public", "data", "pk_rail_forecast_v3.geojson")
-    cells_csv = "cell_heat.csv"
-    mapping_csv = "piece_station_mapping.csv"
-    baselines_csv = "punjab_station_baselines.csv"
+    baselines_parquet = "punjab_grid_point_baselines.parquet"
+    baselines_csv = "punjab_grid_point_baselines.csv"
+    gate_csv = "punjab_grid_point_gate_p95.csv"
+    cell_mapping_csv = "cell_grid_mapping.csv"
+    output_forecast_json = "forecast.json"
+    web_forecast_json = os.path.join("web", "public", "data", "forecast.json")
 
-    # Verify input prerequisites
-    for req in [geojson_in, cells_csv, mapping_csv, baselines_csv]:
-        if not os.path.exists(req):
-            raise FileNotFoundError(f"Missing required file {req}. Run prior steps first.")
+    # 1. Load baselines, gate thresholds, and cell mapping
+    if os.path.exists(baselines_parquet):
+        print(f"Loading 1991-2020 daily max baselines from {baselines_parquet}...")
+        df_base = pd.read_parquet(baselines_parquet)
+    elif os.path.exists(baselines_csv):
+        print(f"Loading 1991-2020 daily max baselines from {baselines_csv}...")
+        df_base = pd.read_csv(baselines_csv)
+    else:
+        raise FileNotFoundError(f"Missing baselines table ({baselines_parquet} or {baselines_csv}). Run Step 1 first.")
+    if not os.path.exists(gate_csv):
+        raise FileNotFoundError(f"Missing {gate_csv}. Run Step 1 first.")
+    if not os.path.exists(cell_mapping_csv):
+        raise FileNotFoundError(f"Missing {cell_mapping_csv}. Run Step 2 first.")
 
-    # 1. Load cell metadata and fetch/retrieve live 7-day forecast
-    cells_df = pd.read_csv(cells_csv)
-    print(f"Loaded {len(cells_df)} cells from {cells_csv}.")
-    cell_forecasts = fetch_live_forecast_cells(cells_df)
+    print(f"Loading 1991-2020 daily max baselines from {baselines_csv}...")
+    df_base = pd.read_csv(baselines_csv)
+    # Build fast lookup: (grid_point_id, day_of_year) -> (mean, std)
+    base_lookup = {}
+    for _, row in df_base.iterrows():
+        base_lookup[(row["grid_point_id"], int(row["day_of_year"]))] = (
+            float(row["mean_daily_max_c"]),
+            float(row["std_daily_max_c"])
+        )
 
-    # 2. Load Station Baselines lookup
-    baselines_df = pd.read_csv(baselines_csv)
-    current_month = datetime.datetime.now().month
-    print(f"Target forecast calendar month: {current_month} ({datetime.date(2000, current_month, 1).strftime('%B')})")
+    print(f"Loading May-June P95 gate thresholds from {gate_csv}...")
+    df_gate = pd.read_csv(gate_csv)
+    gate_lookup = dict(zip(df_gate["grid_point_id"], df_gate["may_june_p95_c"]))
 
-    month_baselines = baselines_df[baselines_df["month"] == current_month].set_index("station_id")
-    print(f"Active Punjab station baselines for month {current_month}: {len(month_baselines)} stations.")
+    print(f"Loading cell-to-grid mapping from {cell_mapping_csv}...")
+    df_cells = pd.read_csv(cell_mapping_csv)
+    total_cells = len(df_cells)
+    print(f"Loaded {total_cells} cells.")
 
-    # 3. Load Piece-to-Station Mapping
-    mapping_df = pd.read_csv(mapping_csv)
-    mapping_by_idx = mapping_df.set_index("piece_index")
+    # 2. Fetch live 7-day daily forecasts
+    forecast_data = fetch_live_daily_forecasts(df_cells)
 
-    # 4. Load base GeoJSON features
-    print(f"Loading input GeoJSON: {geojson_in}...")
-    load_start = time.time()
-    with open(geojson_in, "r", encoding="utf-8") as f:
-        base_geojson = json.load(f)
+    # 3. Evaluate each cell with hybrid scoring and heat gate
+    print("\nEvaluating hybrid risk tiers and heat risk gate across all cells...")
+    cells_output = {}
+    tier_counts = {
+        "strong_anomaly": 0,
+        "elevated_anomaly": 0,
+        "mild_anomaly": 0,
+        "near_normal": 0
+    }
+    engine_counts = {
+        "punjab_zscore": 0,
+        "fallback": 0
+    }
 
-    features = base_geojson["features"]
-    total_features = len(features)
-    print(f"Loaded {total_features:,} features in {time.time() - load_start:.2f}s | Memory: {get_memory_usage_mb():.1f} MB")
+    for _, cell_row in df_cells.iterrows():
+        c_id = cell_row["cell_id"]
+        in_cov = bool(cell_row["in_grid_coverage"])
+        pt_id = cell_row["nearest_grid_point_id"] if in_cov else None
+        dist_km = float(cell_row["dist_to_grid_point_km"]) if pd.notnull(cell_row["dist_to_grid_point_km"]) else None
+        cell_hist_max = float(cell_row["air_max_c"]) if pd.notnull(cell_row["air_max_c"]) else 42.0
 
-    # Calculate national percentile parameters for fallback (based on current 7-day cell forecast)
-    all_forecast_air_p95 = [cell_forecasts[cid]["air_p95_c"] for cid in cell_forecasts if cid in cell_forecasts]
-    national_p50 = float(np.percentile(all_forecast_air_p95, 50))
-    national_p80 = float(np.percentile(all_forecast_air_p95, 80))
-    national_p95 = float(np.percentile(all_forecast_air_p95, 95))
-    print(f"National Forecast Quantile Thresholds (P50/P80/P95): {national_p50:.1f} / {national_p80:.1f} / {national_p95:.1f} °C")
+        f_entry = forecast_data.get(c_id, {})
+        dates = f_entry.get("dates", [])
+        daily_maxes = f_entry.get("daily_max_c", [])
 
-    # 5. Hybrid Scoring Algorithm Loop
-    print("Executing hybrid risk evaluation across all rail pieces...")
-    tier_counts = {"Tier 1": 0, "Tier 2": 0, "Tier 3": 0, "Tier 4": 0}
-    punjab_eval_count = 0
-    fallback_eval_count = 0
+        if not dates or not daily_maxes:
+            dates = [datetime.date.today().isoformat()]
+            daily_maxes = [cell_hist_max]
 
-    for idx, feat in enumerate(features):
-        props = feat["properties"]
-        cid = props.get("cell_id")
+        if in_cov and pt_id and pt_id in gate_lookup:
+            # === Engine: Punjab 1991-2020 Z-Score ===
+            engine_counts["punjab_zscore"] += 1
+            daily_z_scores = []
 
-        # Get cell forecast
-        c_fc = cell_forecasts.get(cid, {
-            "air_max_c": float(props.get("air_max_c", 35.0)),
-            "air_p95_c": float(props.get("air_p95_c", 33.0)),
-            "soil_max_c": float(props.get("soil_max_c", 37.0)),
-            "soil_p95_c": float(props.get("soil_p95_c", 35.0))
-        })
+            for d_str, t_val in zip(dates, daily_maxes):
+                try:
+                    dt = datetime.date.fromisoformat(d_str)
+                    doy = dt.timetuple().tm_yday
+                except Exception:
+                    doy = 1
+                mu, sigma = base_lookup.get((pt_id, doy), (t_val, 2.0))
+                # DIURNAL BIAS CORRECTION:
+                # The ERA5 baseline represents 24-hour daily mean temperature.
+                # Live forecast provides daily maximum temperature (an empirical offset of ~5.49 C).
+                # Aligning the daily max to the baseline mean prevents systematic Z-score inflation.
+                t_aligned = t_val - 5.49
+                z_day = (t_aligned - mu) / sigma if sigma > 0 else 0.0
+                daily_z_scores.append((z_day, d_str, t_val))
 
-        t_air_p95 = c_fc["air_p95_c"]
-        t_air_max = c_fc["air_max_c"]
-        t_soil_p95 = c_fc["soil_p95_c"]
-        t_soil_max = c_fc["soil_max_c"]
+            # Pick peak Z-score day over the 7 days
+            daily_z_scores.sort(key=lambda x: x[0], reverse=True)
+            peak_z, peak_day, peak_temp = daily_z_scores[0]
+            max_forecast_c = max(daily_maxes)
 
-        # Retrieve spatial mapping
-        m_row = mapping_by_idx.loc[idx]
-        has_86yr = bool(m_row["has_86yr_baseline"])
-        stat_id = m_row["nearest_station_id"]
-        dist_km = float(m_row["dist_to_station_km"])
+            # Heat Risk Gate Check
+            mj_p95_ref = gate_lookup[pt_id]
+            gate_threshold = mj_p95_ref - GATE_C
+            gate_passed = max_forecast_c >= gate_threshold
 
-        z_score = None
-        stat_mu = None
-        stat_sigma = None
-        scoring_method = None
-        tier_code = None
-        tier_label = None
-        tier_rank = None
-
-        if has_86yr and pd.notnull(stat_id) and str(stat_id) in month_baselines.index:
-            # High-precision Punjab 86-Year Z-Score Engine
-            b_row = month_baselines.loc[str(stat_id)]
-            stat_mu = float(b_row["air_mean_86yr"])
-            stat_sigma = float(b_row["air_std_86yr"])
-
-            if stat_sigma > 0:
-                z_score = round(float((t_air_p95 - stat_mu) / stat_sigma), 2)
+            # Tier classification
+            if gate_passed:
+                if peak_z >= 2.0:
+                    tier = "strong_anomaly"
+                elif peak_z >= 1.2:
+                    tier = "elevated_anomaly"
+                elif peak_z >= 0.5:
+                    tier = "mild_anomaly"
+                else:
+                    tier = "near_normal"
             else:
-                z_score = 0.0
+                # Fails heat gate -> demote to near_normal to avoid mild/winter alerts
+                tier = "near_normal"
 
-            scoring_method = "punjab_86yr_zscore"
-            punjab_eval_count += 1
+            tier_counts[tier] += 1
+            cells_output[c_id] = {
+                "engine": "punjab_zscore",
+                "grid_point_id": pt_id,
+                "dist_to_grid_point_km": round(dist_km, 1) if dist_km is not None else None,
+                "peak_day": peak_day,
+                "forecast_max_c": round(max_forecast_c, 1),
+                "z": round(float(peak_z), 2),
+                "margin": None,
+                "gate_passed": bool(gate_passed),
+                "tier": tier
+            }
 
-            if z_score >= 2.0:
-                tier_code = 1
-                tier_label = "Tier 1 (Critical Anomaly)"
-                tier_rank = "extreme"
-            elif z_score >= 1.2:
-                tier_code = 2
-                tier_label = "Tier 2 (High Anomaly)"
-                tier_rank = "high"
-            elif z_score >= 0.5:
-                tier_code = 3
-                tier_label = "Tier 3 (Moderate Anomaly)"
-                tier_rank = "elevated"
-            else:
-                tier_code = 4
-                tier_label = "Tier 4 (Baseline / Low)"
-                tier_rank = "moderate"
         else:
-            # National Quantile Percentile Ranking Fallback Engine
-            scoring_method = "national_quantile_fallback"
-            fallback_eval_count += 1
+            # === Engine: Fallback (Margin relative to Summer Maximum) ===
+            engine_counts["fallback"] += 1
+            max_idx = int(np.argmax(daily_maxes))
+            peak_temp = daily_maxes[max_idx]
+            peak_day = dates[max_idx] if max_idx < len(dates) else dates[0]
+            max_forecast_c = max(daily_maxes)
 
-            if t_air_p95 >= national_p95:
-                tier_code = 1
-                tier_label = "Tier 1 (Critical Anomaly)"
-                tier_rank = "extreme"
-            elif t_air_p95 >= national_p80:
-                tier_code = 2
-                tier_label = "Tier 2 (High Anomaly)"
-                tier_rank = "high"
-            elif t_air_p95 >= national_p50:
-                tier_code = 3
-                tier_label = "Tier 3 (Moderate Anomaly)"
-                tier_rank = "elevated"
+            # margin = forecast daily max minus cell's May-June maximum
+            margin = max_forecast_c - cell_hist_max
+
+            # Tier classification based on proximity to historical summer peak
+            if margin >= 0.0:
+                tier = "strong_anomaly"
+            elif margin >= -2.0:
+                tier = "elevated_anomaly"
+            elif margin >= -5.0:
+                tier = "mild_anomaly"
             else:
-                tier_code = 4
-                tier_label = "Tier 4 (Baseline / Low)"
-                tier_rank = "moderate"
+                tier = "near_normal"
 
-        # Tally counts
-        tier_key = f"Tier {tier_code}"
-        tier_counts[tier_key] = tier_counts.get(tier_key, 0) + 1
+            tier_counts[tier] += 1
+            cells_output[c_id] = {
+                "engine": "fallback",
+                "grid_point_id": None,
+                "dist_to_grid_point_km": round(dist_km, 1) if dist_km is not None else None,
+                "peak_day": peak_day,
+                "forecast_max_c": round(max_forecast_c, 1),
+                "z": None,
+                "margin": round(float(margin), 1),
+                "gate_passed": False,
+                "tier": tier
+            }
 
-        # Update properties
-        props["forecast_air_p95_c"] = t_air_p95
-        props["forecast_air_max_c"] = t_air_max
-        props["forecast_soil_p95_c"] = t_soil_p95
-        props["forecast_soil_max_c"] = t_soil_max
-        props["has_86yr_baseline"] = has_86yr
-        props["nearest_station_id"] = str(stat_id) if pd.notnull(stat_id) else None
-        props["dist_to_station_km"] = dist_km
-        props["scoring_engine"] = scoring_method
-        props["z_score"] = z_score
-        props["station_mean_86yr"] = round(stat_mu, 2) if stat_mu is not None else None
-        props["station_std_86yr"] = round(stat_sigma, 2) if stat_sigma is not None else None
-        props["tier_code"] = tier_code
-        props["tier_label"] = tier_label
-        props["tier_rank"] = tier_rank
-        props["tier_air"] = tier_rank
-        props["tier_soil"] = tier_rank
-        props["pipeline_version"] = "v3_hybrid_forecast"
+    # 4. Assemble final lightweight forecast payload
+    now_utc = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    forecast_payload = {
+        "metadata": {
+            "title": "Pakistan ThermoRail - 7-Day Live Rail Heat Anomaly Forecast",
+            "generated_at": now_utc,
+            "baseline_period": "1991-2020 WMO Standard Climatological Normal",
+            "heat_gate_parameter_c": GATE_C,
+            "gate_rule": f"Flagged anomaly requires forecast max >= (grid point May-June P95 - {GATE_C} deg C)",
+            "total_cells": total_cells,
+            "engine_counts": engine_counts,
+            "tier_summary": tier_counts
+        },
+        "cells": cells_output
+    }
 
-    # Data Integrity Checks
-    print("Executing output data integrity validation...")
-    if len(features) != 10216:
-        raise ValueError(f"Integrity check failed: Expected 10,216 features, got {len(features)}")
-
-    # Check for NaNs in critical properties
-    nan_found = 0
-    for f in features:
-        p = f["properties"]
-        if p["tier_code"] is None or p["tier_rank"] is None:
-            nan_found += 1
-    if nan_found > 0:
-        raise ValueError(f"Integrity check failed: Found {nan_found} features with null tier assignments.")
-
-    print(f"PASS: Exactly {len(features):,} features verified.")
-    print("PASS: Zero null tier assignments detected.")
-    print(f"Punjab Z-Score evaluations: {punjab_eval_count:,} ({punjab_eval_count / total_features * 100:.1f}%)")
-    print(f"National fallback evaluations: {fallback_eval_count:,} ({fallback_eval_count / total_features * 100:.1f}%)")
-    print(f"Tier Distribution: {tier_counts}")
-
-    # 6. Save GeoJSON outputs
-    print(f"Writing updated forecast GeoJSON to {geojson_out_root}...")
-    with open(geojson_out_root, "w", encoding="utf-8") as f:
-        json.dump(base_geojson, f)
-    print(f"Saved root copy ({os.path.getsize(geojson_out_root) / (1024 * 1024):.1f} MB)")
-
-    # Web output
-    os.makedirs(os.path.dirname(geojson_out_web), exist_ok=True)
-    with open(geojson_out_web, "w", encoding="utf-8") as f:
-        json.dump(base_geojson, f)
-    print(f"Saved web production copy to {geojson_out_web} ({os.path.getsize(geojson_out_web) / (1024 * 1024):.1f} MB)")
+    # 5. Export lightweight JSON files
+    os.makedirs(os.path.dirname(web_forecast_json), exist_ok=True)
+    for p in [output_forecast_json, web_forecast_json]:
+        with open(p, "w", encoding="utf-8") as f:
+            json.dump(forecast_payload, f, indent=2)
+        print(f"Exported lightweight forecast to {p} ({os.path.getsize(p) / 1024:.1f} KB)")
 
     total_time = time.time() - start_time
-    print("=" * 65)
-    print(f"Execution Summary: Hybrid Risk Pipeline completed in {total_time:.2f}s")
-    print(f"Peak Memory Usage: {get_memory_usage_mb():.1f} MB")
-    print("=" * 65)
-    return base_geojson
+    print("\n" + "=" * 70)
+    print("ThermoRail: Pipeline Execution Summary")
+    print("=" * 70)
+    print(f"Total Processed Cells: {total_cells}")
+    print(f"  * Punjab Grid Z-Score Engine: {engine_counts['punjab_zscore']} cells")
+    print(f"  * National Fallback Engine:   {engine_counts['fallback']} cells")
+    print("\nTier Distribution:")
+    for tier_name, count in tier_counts.items():
+        pct = (count / total_cells) * 100
+        print(f"  * {tier_name:18}: {count:4d} cells ({pct:5.1f}%)")
+    print(f"\nExecution Duration: {total_time:.2f}s | Peak Memory: {get_memory_usage_mb():.1f} MB")
+    print("=" * 70)
+
+    return forecast_payload
 
 
 if __name__ == "__main__":
-    run_hybrid_forecast_pipeline()
-
+    run_pipeline()

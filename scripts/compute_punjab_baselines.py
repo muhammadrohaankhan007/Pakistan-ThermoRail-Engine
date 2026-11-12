@@ -1,26 +1,30 @@
 #!/usr/bin/env python3
 """
-Step 1: Single-Pass Station Baseline Extraction
-ThermoRail Hybrid Risk Engine & Historical Baseline Integration
+Step 1: Grid-Point Daily Maximum Baseline Extraction & Calibration Check
+Pakistan ThermoRail - Climatological Baseline Engine (1991-2020 WMO Normal)
 
-Ingests the unified 1940-2026 ERA5 Punjab dataset, extracts the month,
-and computes vectorized statistical baselines per (station_id, month):
-- air_mean_86yr (mu)
-- air_std_86yr (sigma)
-- air_p90_86yr
-- air_p95_86yr
-- air_p99_86yr
-
-Outputs: punjab_station_baselines.csv
-Includes guard rails to catch and raise an error if any std is zero or nulls exist.
+Vectorized extraction of daily maximum temperature baselines from ERA5 reanalysis:
+1. Filters unified dataset to 1991-2020 (WMO standard 30-year normal period).
+2. Computes daily maximum baseline per grid point and day-of-year (DOY 1-366):
+   - Centered +/-7 day moving window (15-day climatological sample per DOY).
+   - Mean of daily max (mu)
+   - Standard deviation of daily max (sigma)
+3. Computes each grid point's May-June 95th percentile of daily max (for the heat risk gate).
+4. Data Integrity Guard Rails:
+   - Asserts zero null values across all grid points and days of year.
+   - Asserts all standard deviations are strictly positive (sigma > 0).
+5. Statistical Calibration Check:
+   - Evaluates 30 random past historical days from 1991-2020 against the DOY baselines.
+   - Reports the empirical share of points at z >= 2.0 (expected ~2%) and z >= 1.0 (expected ~16%).
+   - Flags an error if statistics deviate substantially from standard normal theory.
 """
 
 import sys
 import os
 import time
 import psutil
-import pandas as pd
 import numpy as np
+import pandas as pd
 
 
 def get_memory_usage_mb():
@@ -29,127 +33,150 @@ def get_memory_usage_mb():
     return process.memory_info().rss / (1024 * 1024)
 
 
-def ensure_dataset_exists():
-    """Ensures punjab_temperature_1940_2026.parquet and punjab_stations.csv exist."""
+def ensure_source_parquet():
+    """Confirms source parquet exists."""
     parquet_path = "punjab_temperature_1940_2026.parquet"
-    stations_path = "punjab_stations.csv"
-    excel_path = "ERA5_Daily_Compiled_1940_2026_Full.xlsx"
-
-    if os.path.exists(parquet_path) and os.path.exists(stations_path):
-        return
-
-    print("Parquet/stations dataset not found. Extracting from Excel...")
-    if not os.path.exists(excel_path):
-        raise FileNotFoundError(f"Raw source Excel not found: {excel_path}")
-
-    # Extract stations
-    df_grid = pd.read_excel(excel_path, sheet_name="Grid_Coordinates", engine="calamine")
-    stations = df_grid.rename(columns={
-        "Grid_ID": "station_id",
-        "Column_Name": "name",
-        "Latitude": "lat",
-        "Longitude": "lon"
-    })
-    stations.to_csv(stations_path, index=False)
-    print(f"Generated {stations_path} ({len(stations)} stations)")
-
-    # Extract continuous readings
-    df = pd.read_excel(excel_path, sheet_name="1940_2026_Continuous", engine="calamine")
-    df["timestamp"] = pd.to_datetime(df[["Year", "Month", "Day"]])
-    station_cols = [c for c in df.columns if c not in ["Year", "Month", "Day", "timestamp"]]
-    col_to_id = {c: c.split("_")[0] for c in station_cols}
-    df = df.rename(columns=col_to_id)
-    station_ids = list(col_to_id.values())
-
-    df_long = df.melt(id_vars=["timestamp"], value_vars=station_ids, var_name="station_id", value_name="temperature")
-    df_long["temperature"] = df_long["temperature"].astype("float32")
-    df_long.to_parquet(parquet_path, index=False, engine="pyarrow")
-    print(f"Generated {parquet_path} ({len(df_long):,} rows)")
+    if not os.path.exists(parquet_path):
+        raise FileNotFoundError(f"Missing required source dataset: {parquet_path}")
+    return parquet_path
 
 
-def compute_baselines():
+def compute_doy_baselines():
     start_time = time.time()
-    print("=" * 65)
-    print("ThermoRail: Step 1 - Single-Pass Station Baseline Extraction")
-    print("=" * 65)
+    print("=" * 70)
+    print("ThermoRail: Step 1 - Grid-Point Daily Max Baselines (1991-2020 Normal)")
+    print("=" * 70)
     print(f"Initial Memory: {get_memory_usage_mb():.1f} MB")
 
-    ensure_dataset_exists()
+    parquet_path = ensure_source_parquet()
+    output_baselines_csv = "punjab_grid_point_baselines.csv"
+    output_baselines_parquet = "punjab_grid_point_baselines.parquet"
+    output_gate_p95_csv = "punjab_grid_point_gate_p95.csv"
 
-    parquet_path = "punjab_temperature_1940_2026.parquet"
-    output_csv = "punjab_station_baselines.csv"
-
-    print(f"Loading unified dataset from {parquet_path}...")
-    load_start = time.time()
+    # 1. Ingest dataset and filter to 1991-2020 baseline window
+    print("Loading 1940-2026 parquet and filtering to 1991-2020 (30-year normal)...")
+    t0 = time.time()
     df = pd.read_parquet(parquet_path)
-    load_time = time.time() - load_start
-    row_count = len(df)
-    print(f"Loaded {row_count:,} records in {load_time:.2f}s | Memory: {get_memory_usage_mb():.1f} MB")
+    df["year"] = df["timestamp"].dt.year
+    df_30 = df[(df["year"] >= 1991) & (df["year"] <= 2020)].copy()
+    print(f"Loaded {len(df_30):,} records for 1991-2020 in {time.time() - t0:.2f}s")
 
-    # 1. Extract month (1-12) from timestamp
-    print("Extracting calendar month from timestamp...")
-    df["month"] = df["timestamp"].dt.month.astype("int8")
+    # Rename station_id to grid_point_id for consistent terminology
+    df_30 = df_30.rename(columns={"station_id": "grid_point_id"})
 
-    # 2. Vectorized grouping by ['station_id', 'month'] on temperature
-    print("Grouping by ['station_id', 'month'] and calculating mean, std, p90, p95, p99...")
-    agg_start = time.time()
+    # 2. Pivot to date x grid_point_id matrix for fast vectorization
+    print("Pivoting daily records to date x grid point matrix...")
+    pivot = df_30.pivot(index="timestamp", columns="grid_point_id", values="temperature")
+    grid_point_ids = pivot.columns.tolist()
+    dates = pivot.index
+    doys = dates.dayofyear.values  # 1 to 366
+    mat = pivot.values  # Shape: (10958, num_grid_points)
+    num_grid_points = mat.shape[1]
+    print(f"Matrix shape: {mat.shape} (10,958 calendar days x {num_grid_points} grid points)")
 
-    grouped = df.groupby(["station_id", "month"])["temperature"]
+    # 3. Compute DOY baselines with +/-7 day window (15-day centered window)
+    print("Computing mean and std of daily max per day-of-year (+/-7 day circular window)...")
+    t_doy = time.time()
+    means = np.zeros((366, num_grid_points), dtype=np.float32)
+    stds = np.zeros((366, num_grid_points), dtype=np.float32)
 
-    # Compute mean and standard deviation in a single pass
-    base_stats = grouped.agg(
-        air_mean_86yr="mean",
-        air_std_86yr="std"
-    )
+    for d in range(1, 367):
+        # Circular difference on 365 days
+        diff = np.abs(doys - d)
+        diff = np.minimum(diff, 365 - diff)
+        mask = diff <= 7
+        sub = mat[mask, :]
+        means[d - 1, :] = sub.mean(axis=0)
+        stds[d - 1, :] = sub.std(axis=0, ddof=1)
 
-    # Compute exact percentiles
-    p90 = grouped.quantile(0.90)
-    p95 = grouped.quantile(0.95)
-    p99 = grouped.quantile(0.99)
+    print(f"Calculated 366 DOY baselines in {time.time() - t_doy:.2f}s")
 
-    baselines = base_stats.assign(
-        air_p90_86yr=p90,
-        air_p95_86yr=p95,
-        air_p99_86yr=p99
-    ).reset_index()
+    # 4. Guard Rails
+    print("Executing statistical integrity guard rails...")
+    if np.isnan(means).any():
+        raise ValueError("GUARD RAIL FAILURE: NaN found in baseline means!")
+    if np.isnan(stds).any():
+        raise ValueError("GUARD RAIL FAILURE: NaN found in baseline standard deviations!")
+    if (stds <= 0).any():
+        min_std = stds.min()
+        raise ValueError(f"GUARD RAIL FAILURE: Found standard deviation <= 0 (min: {min_std})!")
 
-    agg_time = time.time() - agg_start
-    print(f"Aggregation completed in {agg_time:.2f}s | Result rows: {len(baselines):,}")
+    print(f"PASS: Zero null values across all {366 * num_grid_points:,} baseline values.")
+    print(f"PASS: All standard deviations are strictly positive (min std: {stds.min():.3f} C).")
 
-    # Guard Rails
-    print("Executing data integrity guard rails...")
+    # 5. Compute May-June 95th percentile of daily max per grid point (for the heat gate)
+    print("Computing May-June 95th percentile of daily max per grid point (for heat risk gate)...")
+    mj_mask = df_30["timestamp"].dt.month.isin([5, 6])
+    mj_df = df_30[mj_mask]
+    mj_p95 = mj_df.groupby("grid_point_id")["temperature"].quantile(0.95).reset_index()
+    mj_p95 = mj_p95.rename(columns={"temperature": "may_june_p95_c"})
+    mj_p95.to_csv(output_gate_p95_csv, index=False)
+    print(f"Saved May-June P95 thresholds to {output_gate_p95_csv} ({len(mj_p95)} grid points)")
 
-    # Check for null values
-    null_counts = baselines.isnull().sum()
-    total_nulls = null_counts.sum()
-    if total_nulls > 0:
-        error_msg = f"GUARD RAIL VIOLATION: Found {total_nulls} null values in baselines lookup:\n{null_counts}"
-        print(f"ERROR: {error_msg}", file=sys.stderr)
-        raise ValueError(error_msg)
+    # 6. Save tabular baseline lookups
+    baseline_records = []
+    for d in range(1, 367):
+        for idx, g_id in enumerate(grid_point_ids):
+            baseline_records.append({
+                "grid_point_id": g_id,
+                "day_of_year": d,
+                "mean_daily_max_c": round(float(means[d - 1, idx]), 3),
+                "std_daily_max_c": round(float(stds[d - 1, idx]), 3)
+            })
 
-    # Check for zero standard deviation
-    zero_std = (baselines["air_std_86yr"] <= 0).sum()
-    if zero_std > 0:
-        error_msg = f"GUARD RAIL VIOLATION: Found {zero_std} stations with standard deviation <= 0."
-        print(f"ERROR: {error_msg}", file=sys.stderr)
-        raise ValueError(error_msg)
+    df_baselines = pd.DataFrame(baseline_records)
+    df_baselines.to_csv(output_baselines_csv, index=False)
+    df_baselines.to_parquet(output_baselines_parquet, index=False, engine="pyarrow")
+    print(f"Saved baseline lookup tables: {output_baselines_csv} and {output_baselines_parquet}")
 
-    print(f"PASS: Zero nulls detected across all {len(baselines)} rows.")
-    print(f"PASS: All {len(baselines)} standard deviations are strictly positive.")
+    # 7. Calibration Check: Score 30 random past days against the 1991-2020 baseline
+    print("\n" + "=" * 70)
+    print("ThermoRail: Statistical Calibration Check (30 Random Historical Days)")
+    print("=" * 70)
+    np.random.seed(42)
+    sample_indices = np.random.choice(len(dates), size=30, replace=False)
+    sample_dates = dates[sample_indices]
 
-    # 4. Save to static lookup table
-    baselines.to_csv(output_csv, index=False)
-    file_size_kb = os.path.getsize(output_csv) / 1024
-    print(f"Saved static lookup table to {output_csv} ({file_size_kb:.1f} KB)")
+    z_scores = []
+    for idx in sample_indices:
+        d = doys[idx]
+        actual_t = mat[idx, :]
+        mu = means[d - 1, :]
+        sigma = stds[d - 1, :]
+        z = (actual_t - mu) / sigma
+        z_scores.extend(z)
 
-    total_time = time.time() - start_time
-    print("=" * 65)
-    print(f"Execution Summary: Processed {row_count:,} rows -> {len(baselines)} baselines in {total_time:.2f}s")
-    print(f"Peak Memory Usage: {get_memory_usage_mb():.1f} MB")
-    print("=" * 65)
-    return baselines
+    z_arr = np.array(z_scores)
+    total_evals = len(z_arr)
+    share_ge_2 = float(np.mean(z_arr >= 2.0) * 100)
+    share_ge_1 = float(np.mean(z_arr >= 1.0) * 100)
+    share_ge_05 = float(np.mean(z_arr >= 0.5) * 100)
+    share_lt_05 = float(np.mean(z_arr < 0.5) * 100)
+
+    print(f"Total calibration evaluations: {total_evals:,} (30 days x {num_grid_points} grid points)")
+    print(f"  * Share at z >= 2.0 (strong anomaly):   {share_ge_2:6.2f}%  (Target: ~2%, Normal theory: 2.28%)")
+    print(f"  * Share at z >= 1.0 (elevated anomaly): {share_ge_1:6.2f}%  (Target: ~16%, Normal theory: 15.87%)")
+    print(f"  * Share at z >= 0.5 (mild anomaly):     {share_ge_05:6.2f}%  (Target: ~31%, Normal theory: 30.85%)")
+    print(f"  * Share at z <  0.5 (near normal):      {share_lt_05:6.2f}%  (Target: ~69%, Normal theory: 69.15%)")
+
+    # Assert calibration sanity: if share at z >= 2.0 is > 10% or < 0.2%, or z >= 1.0 is > 30% or < 5%
+    if share_ge_2 > 10.0 or share_ge_2 < 0.2:
+        raise ValueError(f"CALIBRATION WARNING: share z >= 2.0 ({share_ge_2:.2f}%) deviates excessively from 2%!")
+    if share_ge_1 > 30.0 or share_ge_1 < 5.0:
+        raise ValueError(f"CALIBRATION WARNING: share z >= 1.0 ({share_ge_1:.2f}%) deviates excessively from 16%!")
+
+    print("\nCalibration check PASSED: Empirical distributions match standard normal baseline expectations.")
+    print(f"Total Execution Time: {time.time() - start_time:.2f}s")
+    print("=" * 70)
+
+    return {
+        "share_ge_2": share_ge_2,
+        "share_ge_1": share_ge_1,
+        "share_ge_05": share_ge_05,
+        "share_lt_05": share_lt_05,
+        "num_grid_points": num_grid_points
+    }
 
 
 if __name__ == "__main__":
-    compute_baselines()
-
+    compute_doy_baselines()
