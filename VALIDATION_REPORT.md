@@ -116,3 +116,24 @@ $$\Delta = T_{\text{forecast model, mean}} - T_{\text{ERA5, mean}}$$
 1. **Unsafe Direction:** The forecast model runs cooler than ERA5 across all summer months. Because Z-scores are calculated as $Z = \frac{T_{\text{model}} - \mu}{\sigma}$, a negative temperature bias produces lower Z-scores.
 2. **Main Line Risk:** Along the high-speed/heavy-haul ML-1 rail corridor (Rawalpindi $\to$ Gujranwala $\to$ Lahore $\to$ Faisalabad), the model runs **$-1.35^\circ\text{C}$ to $-1.62^\circ\text{C}$ cooler** ($-0.53\sigma$ to $-0.66\sigma$). A true $Z = 1.2$ ("Elevated Anomaly") will register only as $Z \approx 0.6$ ("Mild Anomaly").
 3. **Recommendation:** An advisory note has been added to the README and web UI legend warning operators that anomalies may be understated along central Punjab corridors.
+
+---
+
+## 5. Operational Live Run Verification
+
+Execution log and output from the production `scripts/fetch_hybrid_forecast.py` script:
+
+- **Generated Timestamp:** `2026-11-14T10:15:53Z`
+- **Total Processed Cells:** 787
+  - **Punjab Grid Z-Score Engine:** 515 cells
+  - **National Fallback Engine:** 272 cells
+- **Operational Status:** Exit Code `0` (Success)
+- **Live Tier Distribution:**
+  - **Strong Anomaly ($Z \ge 2.0$):** 0 cells (0.0%)
+  - **Elevated Anomaly ($Z \ge 1.2$):** 0 cells (0.0%)
+  - **Mild Anomaly ($Z \ge 0.5$):** 0 cells (0.0%)
+  - **Near Normal ($Z < 0.5$ / Gate suppressed):** 787 cells (100.0%)
+- **Performance:** Duration 21.87s | Peak Memory 205.2 MB
+- **Artifacts Updated:** `forecast.json` (250.8 KB) and `web/public/data/forecast.json` (250.8 KB)
+- **Rate-Limiting Verification:** 5-step exponential backoff successfully handled batch requests without job failure.
+

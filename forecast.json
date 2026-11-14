@@ -1,7 +1,7 @@
 {
   "metadata": {
     "title": "Pakistan ThermoRail - 7-Day Live Rail Heat Anomaly Forecast",
-    "generated_at": "2026-11-14T08:08:29Z",
+    "generated_at": "2026-11-14T10:15:53Z",
     "climatological_variable": "24-hour daily mean temperature (temperature_2m)",
     "baseline_period": "1991-2020 WMO Standard Climatological Normal",
     "statistical_metric": "Daily mean Z-score relative to DOY baseline (+/-7 day window)",

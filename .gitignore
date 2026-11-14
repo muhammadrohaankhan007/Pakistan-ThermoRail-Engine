@@ -8,6 +8,8 @@ punjab_temperature_1940_2026.parquet
 *.rar
 final_data*/
 live_forecast_cache.json
+june_2026_forecast_cache.json
+*cache.json
 cell_heat_test.csv
 pk_rail_heat.geojson
 pk_rail_pieces.geojson
