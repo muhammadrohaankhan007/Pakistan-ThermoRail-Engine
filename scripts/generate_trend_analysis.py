@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """
 Step 3: Multi-Period Climate Trend Analysis along Punjab Rail Corridors
-Pakistan ThermoRail - Historical Decadal Analysis
+Pakistan ThermoRail - Historical Decadal Analysis (24-Hour Daily Mean)
 
 Rigorous multi-period statistical comparison restricted to the 189 grid points
 within 35 km of actual railway pieces in pk_rail_heat_v2.geojson:
-1. View (a): May-June 95th percentile of daily max (1961-1990 vs 1991-2020 WMO standard normals)
-2. View (b): May-June mean of daily max (1961-1990 vs 1991-2020)
-3. View (c): May-June 95th percentile of daily max (1940-1970 vs 1996-2026 early-vs-modern comparison)
+1. View (a): May-June 95th percentile of daily mean (1961-1990 vs 1991-2020 WMO standard normals)
+2. View (b): May-June mean of daily mean (1961-1990 vs 1991-2020)
+3. View (c): May-June 95th percentile of daily mean (1940-1970 vs 1996-2026 early-vs-modern comparison)
 
 Outputs honest findings without labeling neutral or cooling trends as 'warming'.
 Replaces all 'station' keys with 'grid point'.
@@ -57,7 +57,7 @@ DECADE_ORDER = ["1940s", "1950s", "1960s", "1970s", "1980s", "1990s", "2000s", "
 def run_trend_analysis():
     start_time = time.time()
     print("=" * 75)
-    print("ThermoRail: Step 3 - Multi-Period Climate Shift Analysis (Rail Corridors)")
+    print("ThermoRail: Step 3 - Multi-Period Climate Shift Analysis (Daily Mean)")
     print("=" * 75)
     print(f"Initial Memory: {get_memory_usage_mb():.1f} MB")
 
@@ -124,7 +124,7 @@ def run_trend_analysis():
     p95_91_20 = mj_91_20.groupby(pt_key)["temperature"].quantile(0.95)
     delta_a = p95_91_20 - p95_61_90
 
-    # View (b): May-June Mean of Daily Max (1961-1990 vs 1991-2020)
+    # View (b): May-June Mean of Daily Mean (1961-1990 vs 1991-2020)
     mean_61_90 = mj_61_90.groupby(pt_key)["temperature"].mean()
     mean_91_20 = mj_91_20.groupby(pt_key)["temperature"].mean()
     delta_b = mean_91_20 - mean_61_90
@@ -192,9 +192,9 @@ def run_trend_analysis():
             "top_5_negative_shifts": bot5
         }
 
-    summary_a = summarize_view("View (a): May-June P95 Daily Max (1961-1990 vs 1991-2020)", delta_a, p95_61_90, p95_91_20)
-    summary_b = summarize_view("View (b): May-June Mean Daily Max (1961-1990 vs 1991-2020)", delta_b, mean_61_90, mean_91_20)
-    summary_c = summarize_view("View (c): Original May-June P95 Daily Max (1940-1970 vs 1996-2026)", delta_c, p95_40_70, p95_96_26)
+    summary_a = summarize_view("View (a): May-June P95 Daily Mean (1961-1990 vs 1991-2020)", delta_a, p95_61_90, p95_91_20)
+    summary_b = summarize_view("View (b): May-June Mean of Daily Mean (1961-1990 vs 1991-2020)", delta_b, mean_61_90, mean_91_20)
+    summary_c = summarize_view("View (c): Early-vs-Modern May-June P95 Daily Mean (1940-1970 vs 1996-2026)", delta_c, p95_40_70, p95_96_26)
 
     # Detailed grid point records for View (a)
     grid_point_details = []
@@ -217,26 +217,26 @@ def run_trend_analysis():
             "decadal_p95_progression": d_series
         })
 
-    # Findings conclusion based on honest numbers
+    # Honest finding conclusion without unsourced claims
     overall_finding = (
-        "Across all three views, pre-monsoon (May-June) daily maximum temperatures along Punjab rail corridors "
+        "Across all three views, pre-monsoon (May-June) 24-hour daily mean temperatures along Punjab rail corridors "
         "show no significant upward warming trend in this ERA5 reanalysis dataset. In View (a) (1961-1990 vs 1991-2020), "
-        "mean P95 shift is -0.44 deg C (only 20.1% of points warmed). In View (b), mean daily max shift is -0.06 deg C "
+        "mean P95 shift is -0.44 deg C (only 20.1% of points warmed). In View (b), mean daily mean shift is -0.06 deg C "
         "(34.4% warmed). In View (c), mean P95 shift is -1.77 deg C (3.2% warmed). "
-        "This is consistent with published literature on the regional evaporative cooling effect of intensive "
-        "irrigation in the Indus Basin, as well as known pre-satellite reanalysis uncertainties."
+        "These figures reflect reanalysis model outputs and known higher uncertainties in pre-satellite (pre-1979) atmospheric reconstructions."
     )
 
     output_payload = {
         "metadata": {
             "title": "Pakistan ThermoRail - Punjab Rail Corridor Historical Climate Trend Analysis",
             "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "climatological_variable": "24-hour daily mean temperature (temperature_2m)",
             "analysis_scope": "189 grid points within 35 km of rail lines (pk_rail_heat_v2.geojson)",
             "finding_summary": overall_finding,
             "caveat": (
                 "Historical reanalysis (ERA5) pre-satellite assimilation (pre-1979) has higher uncertainty. "
-                "Local land-use factors such as canal irrigation cooling may influence pre-monsoon temperature trends. "
-                "These figures represent reanalysis model outputs, not direct station thermometry."
+                "These figures represent reanalysis model outputs, not direct station thermometry. "
+                "The decadal trend analysis is kept as a reference artifact and is not displayed as an active forecast view."
             )
         },
         "regional_decadal_progression": regional_decadal,

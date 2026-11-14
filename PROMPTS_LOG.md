@@ -176,3 +176,39 @@ Revise the scripts. Do not re-pull any Open-Meteo history; reuse the parquet.
 7. Add a calibration check: score 30 random past days using the 1991-2020 baseline and report the share in each tier. Expect about 2% at z >= 2 and about 16% at z >= 1. Report the numbers. If they are far off, stop and tell me. 
 8. Add a GitHub Actions cron workflow that runs the script daily and publishes forecast.json with the site, without committing daily to main.
 ```
+
+
+---
+
+## Directive 3 / Fix Pass: Unit Consistency, Daily Mean Climatology & Operational Forecast Alignment
+
+**Timestamp:** 2026-11-14T12:33:53+05:00  
+**Role:** Senior Data & Systems Engineer  
+**Objective:** Resolve fundamental unit-consistency discrepancies across the 86-year ERA5 series, live forecast engine, heat gate, bias check, and user interface.
+
+### Key Corrections:
+1. **Climatological Ground Truth:** The 1940–2026 ERA5 series in `punjab_temperature_1940_2026.parquet` represents 24-hour daily mean of `temperature_2m`. All references to "daily max" for this series relabeled to "daily mean".
+2. **Mean-to-Mean Z-Score Architecture:** `fetch_hybrid_forecast.py` requests hourly `temperature_2m` for 7 days, aggregates each local day's 24-hour mean ($T_{\text{forecast, mean}}$), and computes $Z = \frac{T_{\text{forecast, mean}} - \mu}{\sigma}$ with no empirical offset. Retains forecast daily max as a secondary physical display value in popups.
+3. **Corrected Heat Risk Gate:** Compares forecast daily mean against the grid point's May–June 95th percentile daily mean ($\ge P_{95} - 3.0^\circ\text{C}$). Replaces previous flawed comparison of forecast daily max to daily mean $P_{95}$.
+4. **Historical Forecast API Bias Check:** Evaluated operational forecast model against ERA5 for May–June 2026 across 10 corridor points (610 comparisons). Mean gap is $-0.872^\circ\text{C}$ ($-0.314\sigma$). Documented without silent corrections.
+5. **Statistical Verification:** Calibration check (1.75% at $Z \ge 2.0$, 19.60% at $Z \ge 1.0$), synthetic $+3\sigma$ test (0/515 passes in Nov, 515/515 in June), and June 24–30 replay (94.7% activated).
+6. **Documentation & UI Polish:** Removed unsourced canal irrigation cooling claim. Updated all-clear banner to: *"No unusual heat is forecast for the next 7 days, relative to local climate. This is not a safety clearance."* Made DEMO badge unmissable.
+
+### Prompt Text:
+```markdown
+Fix a unit-consistency problem. The 1940-2026 series is daily MEAN of hourly temperature_2m.
+1. Relabel every "daily max" reference for that series as "daily mean": scripts, JSON metadata,
+   README and UI. List every place you changed.
+2. Forecast side: request hourly temperature_2m for 7 days, compute each local day's 24-hour
+   mean, and use Z = (forecast daily mean - mu) / sigma. Remove the constant 5.49 C offset.
+3. Gate: compare the forecast daily MEAN with (grid point's May-June p95 of daily mean - GATE_C).
+   Say what the gate compared before. Keep forecast daily max only as a display value in the popup.
+4. Bias check: using the Open-Meteo Historical Forecast API, compare the live forecast model's
+   daily mean with the ERA5 daily mean at the same 10 points for May-June 2026. Report the mean
+   gap in degrees C and in sigma. Do not correct silently.
+5. Re-run the calibration, the synthetic +3 sigma test and the June 24-30 replay, and report
+   tier counts before and after.
+6. Remove the unsourced irrigation claim, and change the all-clear banner to: "No unusual heat
+   is forecast for the next 7 days, relative to local climate. This is not a safety clearance."
+```
+

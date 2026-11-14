@@ -1,10 +1,11 @@
 {
   "metadata": {
     "title": "Pakistan ThermoRail - Punjab Rail Corridor Historical Climate Trend Analysis",
-    "generated_at": "2026-11-12T20:53:37Z",
+    "generated_at": "2026-11-14T07:35:19Z",
+    "climatological_variable": "24-hour daily mean temperature (temperature_2m)",
     "analysis_scope": "189 grid points within 35 km of rail lines (pk_rail_heat_v2.geojson)",
-    "finding_summary": "Across all three views, pre-monsoon (May-June) daily maximum temperatures along Punjab rail corridors show no significant upward warming trend in this ERA5 reanalysis dataset. In View (a) (1961-1990 vs 1991-2020), mean P95 shift is -0.44 deg C (only 20.1% of points warmed). In View (b), mean daily max shift is -0.06 deg C (34.4% warmed). In View (c), mean P95 shift is -1.77 deg C (3.2% warmed). This is consistent with published literature on the regional evaporative cooling effect of intensive irrigation in the Indus Basin, as well as known pre-satellite reanalysis uncertainties.",
-    "caveat": "Historical reanalysis (ERA5) pre-satellite assimilation (pre-1979) has higher uncertainty. Local land-use factors such as canal irrigation cooling may influence pre-monsoon temperature trends. These figures represent reanalysis model outputs, not direct station thermometry."
+    "finding_summary": "Across all three views, pre-monsoon (May-June) 24-hour daily mean temperatures along Punjab rail corridors show no significant upward warming trend in this ERA5 reanalysis dataset. In View (a) (1961-1990 vs 1991-2020), mean P95 shift is -0.44 deg C (only 20.1% of points warmed). In View (b), mean daily mean shift is -0.06 deg C (34.4% warmed). In View (c), mean P95 shift is -1.77 deg C (3.2% warmed). These figures reflect reanalysis model outputs and known higher uncertainties in pre-satellite (pre-1979) atmospheric reconstructions.",
+    "caveat": "Historical reanalysis (ERA5) pre-satellite assimilation (pre-1979) has higher uncertainty. These figures represent reanalysis model outputs, not direct station thermometry. The decadal trend analysis is kept as a reference artifact and is not displayed as an active forecast view."
   },
   "regional_decadal_progression": {
     "1940s": {
@@ -45,7 +46,7 @@
     }
   },
   "view_a_p95_1961_1990_vs_1991_2020": {
-    "view_name": "View (a): May-June P95 Daily Max (1961-1990 vs 1991-2020)",
+    "view_name": "View (a): May-June P95 Daily Mean (1961-1990 vs 1991-2020)",
     "mean_delta_c": -0.44,
     "median_delta_c": -0.41,
     "warmed_grid_points_count": 38,
@@ -167,7 +168,7 @@
     ]
   },
   "view_b_mean_1961_1990_vs_1991_2020": {
-    "view_name": "View (b): May-June Mean Daily Max (1961-1990 vs 1991-2020)",
+    "view_name": "View (b): May-June Mean of Daily Mean (1961-1990 vs 1991-2020)",
     "mean_delta_c": -0.06,
     "median_delta_c": -0.12,
     "warmed_grid_points_count": 65,
@@ -290,7 +291,7 @@
     ]
   },
   "view_c_p95_1940_1970_vs_1996_2026": {
-    "view_name": "View (c): Original May-June P95 Daily Max (1940-1970 vs 1996-2026)",
+    "view_name": "View (c): Early-vs-Modern May-June P95 Daily Mean (1940-1970 vs 1996-2026)",
     "mean_delta_c": -1.77,
     "median_delta_c": -1.89,
     "warmed_grid_points_count": 6,

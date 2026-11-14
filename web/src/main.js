@@ -272,24 +272,28 @@ function applySyntheticHotSpell(geojson) {
       p.forecast_tier = 'strong_anomaly';
       p.forecast_z = 3.25;
       p.forecast_margin = 1.4;
+      p.forecast_mean_c = 41.3;
       p.forecast_max_c = 46.8;
       p.peak_day = '2026-06-25';
     } else if (mod < 45) {
       p.forecast_tier = 'elevated_anomaly';
       p.forecast_z = 1.78;
       p.forecast_margin = -0.8;
+      p.forecast_mean_c = 38.7;
       p.forecast_max_c = 44.2;
       p.peak_day = '2026-06-26';
     } else if (mod < 85) {
       p.forecast_tier = 'mild_anomaly';
       p.forecast_z = 0.88;
       p.forecast_margin = -3.2;
+      p.forecast_mean_c = 36.0;
       p.forecast_max_c = 41.5;
       p.peak_day = '2026-06-27';
     } else {
       p.forecast_tier = 'near_normal';
       p.forecast_z = 0.21;
       p.forecast_margin = -7.5;
+      p.forecast_mean_c = 31.5;
       p.forecast_max_c = 37.0;
       p.peak_day = '2026-06-28';
     }
@@ -310,6 +314,7 @@ function restoreRealForecast(geojson, forecastData) {
       p.forecast_engine = fc.engine;
       p.forecast_z = fc.z;
       p.forecast_margin = fc.margin;
+      p.forecast_mean_c = fc.forecast_mean_c;
       p.forecast_max_c = fc.forecast_max_c;
       p.peak_day = fc.peak_day;
       p.grid_point_id = fc.grid_point_id;
@@ -320,6 +325,7 @@ function restoreRealForecast(geojson, forecastData) {
       p.forecast_engine = 'fallback';
       p.forecast_z = null;
       p.forecast_margin = null;
+      p.forecast_mean_c = 24.0;
       p.forecast_max_c = 30.0;
       p.peak_day = null;
       p.grid_point_id = null;
@@ -427,7 +433,7 @@ function initApp() {
                               (totalsByMode.forecast_tier.mild_anomaly || 0);
 
           if (nonNormalKm === 0) {
-            allClearBanner.innerHTML = `<strong>ℹ️ No heat anomaly detected in 7-day forecast.</strong><br>All rail segments are operating within near-normal climatological ranges.`;
+            allClearBanner.innerHTML = `<strong>ℹ️ No unusual heat is forecast for the next 7 days, relative to local climate.</strong><br>This is not a safety clearance.`;
             allClearBanner.style.display = 'block';
           } else {
             allClearBanner.style.display = 'none';
@@ -740,14 +746,17 @@ function initApp() {
             ? `${escapeHtml(p.grid_point_id)} (${Number(p.dist_to_grid_point_km || 0).toFixed(1)} km)`
             : `Outside Coverage (${Number(p.dist_to_grid_point_km || 0).toFixed(1)} km from Punjab)`;
           const maxTempStr = p.forecast_max_c != null ? `${Number(p.forecast_max_c).toFixed(1)} \u00b0C` : '\u2014';
+          const meanTempStr = p.forecast_mean_c != null ? `${Number(p.forecast_mean_c).toFixed(1)} \u00b0C` : '\u2014';
           const peakDayStr = p.peak_day ? escapeHtml(p.peak_day) : '\u2014';
 
           metricsHtml = `
-            <span class="popup-key">Forecast Max (7-Day):</span>
+            <span class="popup-key">Forecast Daily Mean:</span>
+            <span class="popup-val">${meanTempStr}</span>
+            <span class="popup-key">Forecast Daily Max:</span>
             <span class="popup-val">${maxTempStr}</span>
             <span class="popup-key">Peak Anomaly Day:</span>
             <span class="popup-val">${peakDayStr}</span>
-            <span class="popup-key">Historical Z-Score:</span>
+            <span class="popup-key">Daily Mean Z-Score:</span>
             <span class="popup-val z-score-val">${escapeHtml(zScoreStr)}</span>
             <span class="popup-key">Summer Record Margin:</span>
             <span class="popup-val">${escapeHtml(marginStr)}</span>
@@ -796,7 +805,7 @@ function initApp() {
             <span class="popup-val">${usageConfidence}</span>
           </div>
           <div class="popup-footnote">Pieces are ~1 km cuts of an OSM way.</div>
-          <div class="popup-disclaimer">Statistical anomaly relative to local normal; not a track-failure threshold.</div>
+          <div class="popup-disclaimer">Statistical daily mean anomaly relative to 1991–2020 normal; not a track-failure threshold.</div>
         `;
 
         const popup = new Popup({ closeButton: true, maxWidth: '350px' })
